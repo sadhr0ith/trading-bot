@@ -19,7 +19,22 @@
       "Bash(NOTIFICATION_EMAILS=\"test1@example.com,test2@example.com\" python3:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git rm:*)"
+      "Bash(git rm:*)",
+      "Bash(pytest:*)",
+      "Bash(.venv/bin/pytest --version)",
+      "Bash(while read dir)",
+      "Bash(do if [ -f $dir/__init__.py ])",
+      "Bash(then echo '$dir: HAS __init__.py' else if ls $dir/*.py)",
+      "Bash(then echo '$dir: MISSING __init__.py ❌' fi fi done)",
+      "Bash(for dir in strategies indicators utils models configs tests)",
+      "Bash(do)",
+      "Bash(if [ -f \"$dir/__init__.py\" ])",
+      "Bash(then)",
+      "Bash(echo:*)",
+      "Bash(else)",
+      "Bash(fi)",
+      "Bash(done)",
+      "Bash(.venv/bin/python:*)"
     ],
     "deny": [],
     "ask": []

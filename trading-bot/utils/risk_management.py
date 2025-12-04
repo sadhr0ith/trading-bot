@@ -15,6 +15,7 @@ class Position:
     size: float
     stop_loss: float | None
     take_profit: float | None
+    peak_price: float | None = None
 
 
 class RiskManager:
@@ -59,6 +60,7 @@ class RiskManager:
         self.take_profit = self.config.take_profit
         self.max_position = self.config.max_position_size
         self.trading_fee = self.config.trading_fee
+        self.trailing_stop = getattr(self.config, "trailing_stop", None)
 
     def calculate_position_size(self, balance: float, price: float) -> float:
         if price <= 0 or balance <= 0:
@@ -70,6 +72,16 @@ class RiskManager:
     def evaluate_exit(self, position: Position, current_price: float) -> bool:
         if position is None:
             return False
+        peak_price = position.peak_price or position.entry_price
+        if self.trailing_stop is not None:
+            peak_price = max(peak_price, current_price)
+            trail_threshold = peak_price * (1 - self.trailing_stop)
+            if current_price <= trail_threshold:
+                self.logger.info(
+                    f"Trailing stop triggered at {current_price:.4f} "
+                    f"(peak {peak_price:.4f}, threshold {trail_threshold:.4f})."
+                )
+                return True
         if position.stop_loss is not None:
             stop_price = position.entry_price * (1 - position.stop_loss)
             if current_price <= stop_price:

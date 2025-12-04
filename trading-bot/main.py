@@ -1,4 +1,6 @@
 import argparse
+import signal
+import sys
 import time
 from datetime import datetime, timedelta
 
@@ -12,6 +14,17 @@ from utils.strategy_helpers import _build_config_signature
 from utils.validators import ConfigValidator, DataValidator
 
 logger = setup_logger("TradingBot")
+
+# Global shutdown flag
+shutdown_requested = False
+
+
+def signal_handler(signum, frame):
+    """Handle SIGTERM/SIGINT for graceful shutdown."""
+    global shutdown_requested
+    signal_name = "SIGTERM" if signum == signal.SIGTERM else "SIGINT"
+    logger.info(f"Received {signal_name}, initiating graceful shutdown...")
+    shutdown_requested = True
 
 
 def _warn_on_config_drift(strategy_name, config):
@@ -38,7 +51,15 @@ def _warn_on_config_drift(strategy_name, config):
 def run_trading_bot(strategy: str):
     """
     Run the trading bot loop for the given strategy: load config, validate, fetch data, execute strategy with backoff.
+
+    Supports graceful shutdown via SIGTERM/SIGINT.
     """
+    global shutdown_requested
+
+    # Register signal handlers
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
+
     config = load_config(strategy)
     if config is None:
         logger.error("Invalid strategy or configuration. Exiting.")
@@ -62,7 +83,7 @@ def run_trading_bot(strategy: str):
     max_backoff_seconds = 1800
     current_backoff_seconds = base_backoff_seconds
 
-    while True:
+    while not shutdown_requested:
         try:
             logger.info(f"Fetching data for asset {asset} with strategy {strategy}")
             data = fetch_data_online(
@@ -118,7 +139,17 @@ def run_trading_bot(strategy: str):
         logger.info(
             f"Sleeping for {timedelta(seconds=sleep_duration)} before fetching data again for {asset} using {strategy}."
         )
-        time.sleep(sleep_duration)
+
+        # Sleep in chunks to allow faster response to shutdown signal
+        sleep_chunk = 60  # Wake up every 60 seconds to check shutdown flag
+        elapsed = 0
+        while elapsed < sleep_duration and not shutdown_requested:
+            chunk_duration = min(sleep_chunk, sleep_duration - elapsed)
+            time.sleep(chunk_duration)
+            elapsed += chunk_duration
+
+    logger.info("Graceful shutdown completed. Exiting trading bot.")
+    sys.exit(0)
 
 
 if __name__ == "__main__":

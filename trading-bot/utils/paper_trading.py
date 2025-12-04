@@ -146,6 +146,7 @@ class PaperTradingExecutor:
                 "entry_notional": notional,
                 "stop_loss": risk_manager.stop_loss,
                 "take_profit": risk_manager.take_profit,
+                "peak_price": price,
                 "opened_at": datetime.utcnow().isoformat(),
             }
             self.state["balance"] -= notional + fee
@@ -169,16 +170,22 @@ class PaperTradingExecutor:
             return self._close_position(symbol, price, reason="manual_sell", risk_manager=risk_manager)
 
         if signal == "HOLD":
-            if position and risk_manager.evaluate_exit(
-                Position(
-                    symbol=symbol,
-                    entry_price=position["entry_price"],
-                    size=position["size"],
-                    stop_loss=position.get("stop_loss"),
-                    take_profit=position.get("take_profit"),
-                ),
-                price,
-            ):
-                return self._close_position(symbol, price, reason="risk_exit", risk_manager=risk_manager)
+            if position:
+                # update trailing peak
+                peak = position.get("peak_price", position["entry_price"])
+                peak = max(peak, price)
+                position["peak_price"] = peak
+                if risk_manager.evaluate_exit(
+                    Position(
+                        symbol=symbol,
+                        entry_price=position["entry_price"],
+                        size=position["size"],
+                        stop_loss=position.get("stop_loss"),
+                        take_profit=position.get("take_profit"),
+                        peak_price=peak,
+                    ),
+                    price,
+                ):
+                    return self._close_position(symbol, price, reason="risk_exit", risk_manager=risk_manager)
 
         return summary

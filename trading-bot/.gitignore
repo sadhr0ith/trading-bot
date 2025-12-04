@@ -1,20 +1,53 @@
+# Environment
 .env
 .env.*
-!/.env.example
+!.env.example
+.venv/
+venv/
+
+# Python
 __pycache__/
 *.pyc
 *.pyo
-.DS_Store
-nohup.out
-log.txt
-output.log
+*.pyd
+.Python
 
 # Testing
 .coverage
 .pytest_cache/
 htmlcov/
+.tox/
+.nox/
 
 # Build
 build/
 dist/
 *.egg-info/
+*.egg
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+log.txt
+output.log
+nohup.out
+
+# Trading bot specific
+saved_models/
+cache/
+paper_trading_state*.json
+
+# Linters/Formatters
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/

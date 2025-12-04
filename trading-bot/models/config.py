@@ -27,8 +27,9 @@ class RiskConfig(_DictLikeModel):
     take_profit: float | None = None
     max_position_size: float = 0.1
     trading_fee: float = 0.001
+    trailing_stop: float | None = None
 
-    @validator("stop_loss", "take_profit", "max_position_size", "trading_fee", pre=True, always=True)
+    @validator("stop_loss", "take_profit", "max_position_size", "trading_fee", "trailing_stop", pre=True, always=True)
     def _ensure_range(cls, value):
         if value is None:
             return value

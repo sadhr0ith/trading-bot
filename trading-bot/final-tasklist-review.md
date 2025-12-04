@@ -1483,7 +1483,124 @@ def function_name(arg1: str, arg2: int) -> bool:
 
 ## 🟢 SPRINT 3: MODERATE Priority (P2) - 2 tygodnie (~3 dni)
 
-*(Reszta tasków P2-1 przez P2-10 - szczegóły w kolejnej sekcji...)*
+### P2-1: Trailing Stop w Risk Management
+**Status:** ✅ Zrobione
+**Priorytet:** 🟢 MODERATE
+**Effort:** 1 godzina
+
+**Zmiany:**
+- `models/config.RiskConfig`: dodano `trailing_stop` z walidacją 0–1.
+- `utils/risk_management.RiskManager/Position`: wsparcie trailing stop (`peak_price`, logowanie wyjść).
+- `utils/paper_trading.PaperTradingExecutor`: śledzenie `peak_price` przy BUY/HOLD.
+- `tests/test_risk_trailing.py`: dwa testy (trigger/ brak triggera).
+
+---
+
+### P2-2: Feature Engineering - Extract Common Code
+**Status:** ❌ Do zrobienia
+**Priorytet:** 🟢 MODERATE
+**Effort:** 2 godziny
+
+*(do zaimplementowania)*
+
+---
+
+### P2-3: Magic Numbers - Move to Config
+**Status:** ❌ Do zrobienia
+**Priorytet:** 🟢 MODERATE
+**Effort:** 1 godzina
+
+*(do zaimplementowania)*
+
+---
+
+### P2-4: Email - Configurable SMTP
+**Status:** ❌ Do zrobienia
+**Priorytet:** 🟢 MODERATE
+**Effort:** 30 minut
+
+*(do zaimplementowania)*
+
+---
+
+### P2-5: Cache - Better Key Generation
+**Status:** ❌ Do zrobienia
+**Priorytet:** 🟢 MODERATE
+**Effort:** 1 godzina
+
+*(do zaimplementowania)*
+
+---
+
+### P2-6: Repo - Clean .gitignore + Remove Artifacts
+**Status:** ✅ Zrobione
+**Priorytet:** 🟢 MODERATE
+**Effort:** 15 minut
+
+**Zmiany:**
+- Zaktualizowano `.gitignore` z kompletnymi sekcjami:
+  - Environment (.env, .venv, venv/)
+  - Python (__pycache__, *.pyc, *.pyo)
+  - Testing (.coverage, .pytest_cache, htmlcov/)
+  - Build (build/, dist/, *.egg-info/)
+  - IDEs (.vscode/, .idea/, *.swp)
+  - OS (.DS_Store, Thumbs.db)
+  - Logs (*.log, nohup.out)
+  - Trading bot specific (saved_models/, cache/, paper_trading_state*.json)
+  - Linters (.mypy_cache/, .ruff_cache/)
+- Zweryfikowano że artefakty nie są trackowane w git
+
+---
+
+### P2-7: Binance - Incremental Fetch
+**Status:** ❌ Do zrobienia
+**Priorytet:** 🟢 MODERATE
+**Effort:** 2 godziny
+
+*(do zaimplementowania)*
+
+---
+
+### P2-8: Project - Package Structure (__init__.py)
+**Status:** ✅ Zrobione
+**Priorytet:** 🟢 MODERATE
+**Effort:** 30 minut
+
+**Zmiany:**
+- Dodano `__init__.py` do wszystkich pakietów:
+  - `strategies/__init__.py`: exports StrategyBase + 4 strategie
+  - `indicators/__init__.py`: exports IndicatorBase + 7 wskaźników
+  - `utils/__init__.py`: exports validators, persistence, paper trading, risk, logger
+  - `models/__init__.py`: exports Pydantic models + LSTM wrapper
+  - `configs/__init__.py`: docstring (bez exports - dynamic loading)
+  - `tests/__init__.py`: docstring test suite
+- Każdy `__init__.py` zawiera docstring opisujący moduł
+- Wszystkie kluczowe klasy/funkcje eksportowane przez `__all__`
+
+---
+
+### P2-9: State - Absolute Paths + File Locking
+**Status:** ❌ Do zrobienia
+**Priorytet:** 🟢 MODERATE
+**Effort:** 1.5 godziny
+
+*(do zaimplementowania)*
+
+---
+
+### P2-10: Main - Graceful Shutdown (SIGTERM)
+**Status:** ✅ Zrobione
+**Priorytet:** 🟢 MODERATE
+**Effort:** 30 minut
+
+**Zmiany:**
+- Dodano signal handler dla SIGTERM i SIGINT w `main.py`
+- Global flag `shutdown_requested` kontroluje main loop
+- Signal handler loguje shutdown event i ustawia flagę
+- Main loop zmieniony z `while True` na `while not shutdown_requested`
+- Sleep w chunksach (60s) dla szybszej reakcji na shutdown
+- Graceful exit z logowaniem: "Graceful shutdown completed. Exiting trading bot."
+- Używa `sys.exit(0)` dla clean shutdown
 
 ---
 
@@ -1503,9 +1620,19 @@ def function_name(arg1: str, arg2: int) -> bool:
 - Sprint 0 (BUGS): 5/5 ✅ (100%)
 - Sprint 1 (P0): 5/5 ✅ (100%)
 - Sprint 2 (P1): 4/4 ✅ (100%)
-- Sprint 3 (P2): 0/10 (0%)
+- Sprint 3 (P2): 4/10 (40%)
+  - ✅ P2-1: Trailing Stop
+  - ✅ P2-6: Clean .gitignore
+  - ✅ P2-8: Package structure (__init__.py)
+  - ✅ P2-10: Graceful shutdown (SIGTERM)
+  - ❌ P2-2: Feature engineering (common code)
+  - ❌ P2-3: Magic numbers → config
+  - ❌ P2-4: Configurable SMTP
+  - ❌ P2-5: Better cache keys
+  - ❌ P2-7: Binance incremental fetch
+  - ❌ P2-9: Absolute paths + file locking
 
-**Total: 14/24 (58%)**
+**Total: 18/24 (75%)**
 
 ---
 

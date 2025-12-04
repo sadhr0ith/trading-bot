@@ -12,6 +12,12 @@ from sklearn.utils.validation import check_is_fitted
 
 from indicators.bollinger_bands import BollingerBands
 from indicators.macd import MACD
+from utils.feature_engineering import (
+    add_indicator_columns,
+    add_lag_features,
+    build_lag_feature_columns,
+    create_forward_return_target,
+)
 from utils.model_persistence import ModelPersistence
 from utils.strategy_helpers import train_or_load_pipeline
 
@@ -42,40 +48,20 @@ class MidTermStrategy(StrategyBase):
         asset = self.config.get("ticker", "UNKNOWN")
         self.log_action("Executing mid-term trading strategy with Random Forest", "info")
 
-        for lag in [5, 10, 20, 60, 120]:
-            data[f"Close_lag_{lag}"] = data["Close"].shift(lag)
-            data[f"Return_lag_{lag}"] = data["Close"].pct_change(lag)
-            data[f"Volatility_{lag}"] = data["Close"].pct_change().rolling(lag).std()
-            rolling_max = data["Close"].rolling(lag).max()
-            data[f"Drawdown_{lag}"] = (data["Close"] / rolling_max) - 1
+        # Add lag-based features using utility function
+        lags = [5, 10, 20, 60, 120]
+        data = add_lag_features(data, lags)
 
-        data["target"] = data["Close"].pct_change(20).shift(-20)
+        # Create forward-looking target (20-day return)
+        data = create_forward_return_target(data, horizon=20)
 
-        feature_columns: list[str] = [
-            "Close_lag_5",
-            "Close_lag_10",
-            "Close_lag_20",
-            "Close_lag_60",
-            "Close_lag_120",
-            "Return_lag_5",
-            "Return_lag_10",
-            "Return_lag_20",
-            "Return_lag_60",
-            "Return_lag_120",
-            "Volatility_5",
-            "Volatility_10",
-            "Volatility_20",
-            "Volatility_60",
-            "Volatility_120",
-            "Drawdown_5",
-            "Drawdown_10",
-            "Drawdown_20",
-            "Drawdown_60",
-            "Drawdown_120",
-        ]
-        for col in ["MACD", "MACD_Histogram", "BB_Width", "BB_Middle"]:
-            if col in data.columns:
-                feature_columns.append(col)
+        # Build feature column list from lags
+        feature_columns = build_lag_feature_columns(lags)
+
+        # Add indicator columns if they exist
+        feature_columns = add_indicator_columns(
+            feature_columns, data, ["MACD", "MACD_Histogram", "BB_Width", "BB_Middle"]
+        )
 
         features = data[feature_columns]
         target = data["target"]

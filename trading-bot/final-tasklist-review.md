@@ -1497,11 +1497,21 @@ def function_name(arg1: str, arg2: int) -> bool:
 ---
 
 ### P2-2: Feature Engineering - Extract Common Code
-**Status:** ❌ Do zrobienia
+**Status:** ✅ Zrobione
 **Priorytet:** 🟢 MODERATE
 **Effort:** 2 godziny
 
-*(do zaimplementowania)*
+**Zmiany:**
+- Utworzono nowy moduł `utils/feature_engineering.py` z reużywalnymi funkcjami:
+  - `add_lag_features()` - dodaje lag, return, volatility, drawdown features
+  - `create_forward_return_target()` - tworzy forward-looking target variable
+  - `build_lag_feature_columns()` - buduje listę nazw kolumn dla lag features
+  - `add_indicator_columns()` - dodaje kolumny wskaźników jeśli istnieją w danych
+- Zrefaktorowano `mid_term_strategy.py`: zamieniono ~35 linii duplikacji na 4 wywołania funkcji
+- Zrefaktorowano `long_term_strategy.py`: zamieniono ~27 linii duplikacji na 4 wywołania funkcji
+- Dodano funkcje do `utils/__init__.py` dla łatwego importu
+- Wszystkie funkcje z pełną dokumentacją (Google-style docstrings)
+- Redukcja kodu: ~60 linii duplikacji wyeliminowane, kod bardziej maintainable
 
 ---
 
@@ -1636,19 +1646,19 @@ def function_name(arg1: str, arg2: int) -> bool:
 - Sprint 0 (BUGS): 5/5 ✅ (100%)
 - Sprint 1 (P0): 5/5 ✅ (100%)
 - Sprint 2 (P1): 4/4 ✅ (100%)
-- Sprint 3 (P2): 7/10 (70%)
+- Sprint 3 (P2): 8/10 (80%)
   - ✅ P2-1: Trailing Stop
+  - ✅ P2-2: Feature engineering (common code)
   - ✅ P2-3: Magic numbers → config
   - ✅ P2-4: Configurable SMTP (było już)
   - ✅ P2-5: Better cache keys
   - ✅ P2-6: Clean .gitignore
   - ✅ P2-8: Package structure (__init__.py)
   - ✅ P2-10: Graceful shutdown (SIGTERM)
-  - ❌ P2-2: Feature engineering (common code)
   - ❌ P2-7: Binance incremental fetch
   - ❌ P2-9: Absolute paths + file locking
 
-**Total: 21/24 (87.5%)**
+**Total: 22/24 (91.7%)**
 
 ---
 

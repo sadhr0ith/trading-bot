@@ -12,6 +12,12 @@ from indicators.ema import EMA
 from indicators.macd import MACD
 from indicators.sma import SMA
 from utils.email_notifications import send_email
+from utils.feature_engineering import (
+    add_indicator_columns,
+    add_lag_features,
+    build_lag_feature_columns,
+    create_forward_return_target,
+)
 from utils.model_persistence import ModelPersistence
 from utils.strategy_helpers import train_or_load_pipeline
 
@@ -46,29 +52,18 @@ class LongTermStrategy(StrategyBase):
             data = data.drop(columns=["MACD", "Signal", "MACD_Histogram"], errors="ignore")
             data = data.join(macd_indicator.calculate())
 
-        # Lagi cen dla long-term (temporalne cechy)
-        for lag in [20, 60, 120, 250]:
-            data[f"Close_lag_{lag}"] = data["Close"].shift(lag)
-            data[f"Return_lag_{lag}"] = data["Close"].pct_change(lag)
-            data[f"Volatility_{lag}"] = data["Close"].pct_change().rolling(lag).std()
-            rolling_max = data["Close"].rolling(lag).max()
-            data[f"Drawdown_{lag}"] = (data["Close"] / rolling_max) - 1
+        # Add lag-based features using utility function
+        lags = [20, 60, 120, 250]
+        data = add_lag_features(data, lags)
 
-        # Target = forward 50-day return (przewidujemy przyszłość!)
-        data["target"] = data["Close"].pct_change(50).shift(-50)
+        # Create forward-looking target (50-day return)
+        data = create_forward_return_target(data, horizon=50)
 
-        # Feature columns (BEZ bieżącego Close - używamy tylko lagów i wskaźników)
-        feature_columns: list[str] = []
-        # Dodaj lagi
-        for lag in [20, 60, 120, 250]:
-            feature_columns.append(f"Close_lag_{lag}")
-            feature_columns.append(f"Return_lag_{lag}")
-            feature_columns.append(f"Volatility_{lag}")
-            feature_columns.append(f"Drawdown_{lag}")
-        # Dodaj wskaźniki
-        for col in ["SMA", "EMA", "MACD"]:
-            if col in data.columns:
-                feature_columns.append(col)
+        # Build feature column list from lags (avoid using current Close - only lags and indicators)
+        feature_columns = build_lag_feature_columns(lags)
+
+        # Add indicator columns if they exist
+        feature_columns = add_indicator_columns(feature_columns, data, ["SMA", "EMA", "MACD"])
 
         # Dropna dla features I target
         combined = data[feature_columns + ["target"]].dropna()

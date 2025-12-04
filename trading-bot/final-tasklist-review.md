@@ -1534,11 +1534,17 @@ def function_name(arg1: str, arg2: int) -> bool:
 ---
 
 ### P2-5: Cache - Better Key Generation
-**Status:** ❌ Do zrobienia
+**Status:** ✅ Zrobione
 **Priorytet:** 🟢 MODERATE
 **Effort:** 1 godzina
 
-*(do zaimplementowania)*
+**Zmiany:**
+- Zmieniono hash z MD5 na SHA256 dla lepszej odporności na kolizje
+- Dodano normalizację okresu (period) do sekund - "1y" i "365d" dają ten sam klucz cache
+- Dodano wersjonowanie cache (v1) dla możliwości invalidacji
+- Rozbudowano dokumentację funkcji `_cache_paths()` z opisem wszystkich ulepszeń
+- Cache key teraz zawiera: `{version}:{source}:{ticker}:{period_seconds}:{interval}`
+- Fallback do surowego stringa jeśli normalizacja się nie powiedzie
 
 ---
 
@@ -1630,19 +1636,19 @@ def function_name(arg1: str, arg2: int) -> bool:
 - Sprint 0 (BUGS): 5/5 ✅ (100%)
 - Sprint 1 (P0): 5/5 ✅ (100%)
 - Sprint 2 (P1): 4/4 ✅ (100%)
-- Sprint 3 (P2): 6/10 (60%)
+- Sprint 3 (P2): 7/10 (70%)
   - ✅ P2-1: Trailing Stop
   - ✅ P2-3: Magic numbers → config
   - ✅ P2-4: Configurable SMTP (było już)
+  - ✅ P2-5: Better cache keys
   - ✅ P2-6: Clean .gitignore
   - ✅ P2-8: Package structure (__init__.py)
   - ✅ P2-10: Graceful shutdown (SIGTERM)
   - ❌ P2-2: Feature engineering (common code)
-  - ❌ P2-5: Better cache keys
   - ❌ P2-7: Binance incremental fetch
   - ❌ P2-9: Absolute paths + file locking
 
-**Total: 20/24 (83%)**
+**Total: 21/24 (87.5%)**
 
 ---
 

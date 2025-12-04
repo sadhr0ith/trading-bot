@@ -160,10 +160,44 @@ def _get_klines_with_retry(client, ticker, interval, start_time_ms, batch_size, 
 
 
 def _cache_paths(source: str, ticker: str, period: str, interval: str):
+    """Generate cache path with robust key generation.
+
+    Improvements over simple hashing:
+    - Normalizes period to seconds for consistent keys (e.g., "1y" == "365d")
+    - Uses SHA256 for better collision resistance than MD5
+    - Includes cache version prefix for format invalidation
+    - Ensures equivalent parameters always produce same cache key
+
+    Args:
+        source: Data source ("yahoo" or "binance")
+        ticker: Asset symbol (e.g., "AAPL", "BTCUSDT")
+        period: Time period (e.g., "1y", "6M", "90d")
+        interval: Candle interval (e.g., "1d", "1h", "5m")
+
+    Returns:
+        Path to cache file with SHA256-based filename
+    """
     cache_dir = Path("cache")
     cache_dir.mkdir(parents=True, exist_ok=True)
-    raw_key = f"{source}:{ticker}:{period}:{interval}"
-    key_hash = hashlib.md5(raw_key.encode("utf-8")).hexdigest()
+
+    # Normalize period to total seconds for consistent cache keys
+    # This ensures "1y" and "365d" produce identical keys
+    try:
+        period_seconds = int(parse_period_to_timedelta(period).total_seconds())
+    except Exception:  # noqa: BLE001
+        # Fallback to raw period string if parsing fails
+        period_seconds = period
+        logger.warning(f"Failed to normalize period '{period}' for cache key; using raw value")
+
+    # Cache version allows invalidation when format changes
+    cache_version = "v1"
+
+    # Build cache key with all parameters that affect the fetched data
+    raw_key = f"{cache_version}:{source}:{ticker}:{period_seconds}:{interval}"
+
+    # Use SHA256 for better collision resistance and security
+    key_hash = hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
+
     return cache_dir / f"{key_hash}.pkl"
 
 

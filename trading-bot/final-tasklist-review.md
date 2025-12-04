@@ -70,7 +70,7 @@ print('PASS' if not result.is_valid else 'FAIL')
 ---
 
 ### BUG-2: Podwójne Ładowanie Modeli
-**Status:** ❌ Do zrobienia
+**Status:** ✅ Zrobione
 **Priorytet:** 🔴 CRITICAL
 **Effort:** 10 minut
 **Pliki:**
@@ -118,7 +118,7 @@ Strategia ignoruje pipeline zwrócony przez `train_or_load_pipeline()` i ładuje
 ---
 
 ### BUG-3: Config Drift Detection Broken (day_trading)
-**Status:** ❌ Do zrobienia
+**Status:** ✅ Zrobione
 **Priorytet:** 🔴 CRITICAL
 **Effort:** 5 minut
 **Plik:** `strategies/day_trading_strategy.py`
@@ -160,7 +160,7 @@ Day trading nie zapisuje `config_signature` w metadata, więc drift detection ni
 ---
 
 ### BUG-4: Hold-out Data Leakage (short_term)
-**Status:** ❌ Do zrobienia
+**Status:** ✅ Zrobione
 **Priorytet:** 🔴 CRITICAL
 **Effort:** 30 minut
 **Plik:** `strategies/short_term_strategy.py`
@@ -204,7 +204,7 @@ Training set (`data.iloc[:-1]`) i inference set (`data.iloc[-25:]`) mają 24/25 
 ---
 
 ### BUG-5: Wskaźniki Mutują DataFrame
-**Status:** ❌ Do zrobienia
+**Status:** ✅ Zrobione
 **Priorytet:** 🔴 CRITICAL
 **Effort:** 1 godzina (wszystkie indicators)
 **Pliki:**
@@ -266,7 +266,7 @@ Wskaźniki modyfikują `self.data` in-place, co powoduje side effects trudne do 
 ## 🔴 SPRINT 1: CRITICAL Issues (P0) - 1 tydzień (~4h)
 
 ### P0-1: Security - Move Emails to .env
-**Status:** ❌ Do zrobienia
+**Status:** ✅ Zrobione
 **Priorytet:** 🔴 CRITICAL
 **Effort:** 15 minut
 **Zależności:** Żadne
@@ -314,7 +314,7 @@ Wskaźniki modyfikują `self.data` in-place, co powoduje side effects trudne do 
 ---
 
 ### P0-2: Custom Exception Classes
-**Status:** ❌ Do zrobienia
+**Status:** ✅ Zrobione
 **Priorytet:** 🔴 CRITICAL
 **Effort:** 1 godzina
 **Zależności:** Żadne
@@ -408,7 +408,7 @@ Wskaźniki modyfikują `self.data` in-place, co powoduje side effects trudne do 
 ---
 
 ### P0-3: Add pyproject.toml + Linters
-**Status:** ❌ Do zrobienia
+**Status:** ✅ Zrobione
 **Priorytet:** 🔴 CRITICAL
 **Effort:** 30 minut + formatowanie
 **Zależności:** Żadne
@@ -572,7 +572,7 @@ Wskaźniki modyfikują `self.data` in-place, co powoduje side effects trudne do 
 ---
 
 ### P0-4: Add Lock File (pip-tools)
-**Status:** ❌ Do zrobienia
+**Status:** ✅ Zrobione
 **Priorytet:** 🔴 CRITICAL
 **Effort:** 1 godzina
 **Zależności:** P0-3 (pyproject.toml)
@@ -660,7 +660,7 @@ Wskaźniki modyfikują `self.data` in-place, co powoduje side effects trudne do 
 ---
 
 ### P0-5: Create README.md
-**Status:** ❌ Do zrobienia
+**Status:** ✅ Zrobione
 **Priorytet:** 🔴 CRITICAL
 **Effort:** 30 minut
 **Zależności:** P0-3, P0-4
@@ -1500,12 +1500,12 @@ def function_name(arg1: str, arg2: int) -> bool:
 - [ ] Target: <50 errors
 
 ### Completed Tasks
-- Sprint 0 (BUGS): 0/5
-- Sprint 1 (P0): 0/5
-- Sprint 2 (P1): 0/4
-- Sprint 3 (P2): 0/10
+- Sprint 0 (BUGS): 5/5 ✅ (100%)
+- Sprint 1 (P0): 3/5 (60%)
+- Sprint 2 (P1): 0/4 (0%)
+- Sprint 3 (P2): 0/10 (0%)
 
-**Total: 0/24 (0%)**
+**Total: 8/24 (33%)**
 
 ---
 

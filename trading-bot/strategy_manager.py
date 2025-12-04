@@ -14,3 +14,4 @@ def select_strategy(config, data):
     elif config["strategy"] == "long_term":
         from strategies.long_term_strategy import LongTermStrategy
         return LongTermStrategy(config, data)
+    raise ValueError(f"Unsupported strategy type: {config.get('strategy')}")

@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(test:*)",
+      "Bash(git checkout:*)",
+      "Bash(python -m py_compile:*)",
+      "Bash(python -c:*)",
+      "Bash(python -m venv venv)",
+      "Bash(source venv/bin/activate)",
+      "Bash(pip install -q numpy pandas scikit-learn xgboost)",
+      "Bash(tree:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(python3 -m pytest:*)",
+      "Bash(/opt/anaconda3/bin/python -m pytest:*)",
+      "Bash(/opt/anaconda3/bin/python:*)",
+      "Bash(find:*)",
+      "Bash(python3 -m pip install:*)",
+      "Bash(python3:*)",
+      "Bash(NOTIFICATION_EMAILS=\"test1@example.com,test2@example.com\" python3:*)",
+      "Bash(git add:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

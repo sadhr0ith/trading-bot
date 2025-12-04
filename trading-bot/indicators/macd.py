@@ -1,35 +1,25 @@
 import pandas as pd
+from typing import Optional
 
 class MACD:
-    def __init__(self, data, short_window=12, long_window=26, signal_window=9):
+    def __init__(self, data: pd.DataFrame, short_window: int = 12, long_window: int = 26, signal_window: int = 9):
         """
-        Initialize MACD with the given data.
-        :param data: DataFrame containing the price data (assumes 'Close' column exists).
-        :param short_window: Period for the short-term EMA (default 12).
-        :param long_window: Period for the long-term EMA (default 26).
-        :param signal_window: Period for the signal line EMA (default 9).
+        MACD indicator.
+        :param data: DataFrame containing 'Close'.
         """
         self.data = data
         self.short_window = short_window
         self.long_window = long_window
         self.signal_window = signal_window
 
-    def calculate(self):
+    def calculate(self) -> pd.DataFrame:
         """
-        Calculate the MACD line, signal line, and histogram.
-        :return: DataFrame with MACD, Signal, and MACD_Histogram columns.
+        Calculate the MACD line, signal line, and histogram without mutating original data.
         """
-        # Calculate short-term and long-term EMAs
-        self.data['EMA_short'] = self.data['Close'].ewm(span=self.short_window, adjust=False).mean()
-        self.data['EMA_long'] = self.data['Close'].ewm(span=self.long_window, adjust=False).mean()
-
-        # Calculate MACD line
-        self.data['MACD'] = self.data['EMA_short'] - self.data['EMA_long']
-
-        # Calculate Signal line
-        self.data['Signal'] = self.data['MACD'].ewm(span=self.signal_window, adjust=False).mean()
-
-        # Calculate MACD Histogram
-        self.data['MACD_Histogram'] = self.data['MACD'] - self.data['Signal']
-
-        return self.data[['MACD', 'Signal', 'MACD_Histogram']]
+        df = self.data.copy()
+        df['EMA_short'] = df['Close'].ewm(span=self.short_window, adjust=False).mean()
+        df['EMA_long'] = df['Close'].ewm(span=self.long_window, adjust=False).mean()
+        df['MACD'] = df['EMA_short'] - df['EMA_long']
+        df['Signal'] = df['MACD'].ewm(span=self.signal_window, adjust=False).mean()
+        df['MACD_Histogram'] = df['MACD'] - df['Signal']
+        return df[['MACD', 'Signal', 'MACD_Histogram']]

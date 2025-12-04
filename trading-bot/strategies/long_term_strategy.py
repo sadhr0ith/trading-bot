@@ -1,93 +1,206 @@
-from .strategy_base import StrategyBase
-from models.random_forest_model import RandomForestModel
-from indicators.sma import SMA  # Import SMA indicator (or implement it)
-from indicators.ema import EMA  # Import EMA indicator (or implement it)
-from indicators.macd import MACD
-from sklearn.model_selection import train_test_split
-from utils.email_notifications import send_email
+from typing import List
+
 import numpy as np
+from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.linear_model import ElasticNet
+from sklearn.model_selection import TimeSeriesSplit, cross_val_score
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.utils.validation import check_is_fitted
+
+from indicators.ema import EMA
+from indicators.macd import MACD
+from indicators.sma import SMA
+from utils.email_notifications import send_email
+from utils.model_persistence import ModelPersistence
+from utils.strategy_helpers import train_or_load_pipeline
+from .strategy_base import StrategyBase
+
 
 class LongTermStrategy(StrategyBase):
+    """Long-term (50-day) RandomForest using long lags, return/vol/drawdown features, indicators, and correlation pruning."""
     def execute(self):
         asset = self.config["ticker"]
         strategy_name = self.config["strategy"]
 
         self.log_action(f"Executing long-term strategy for {asset} using Random Forest and SMA/EMA", "info")
+        self.data = self.data.sort_index()
 
-        # Calculate long-term indicators like SMA, EMA, and possibly MACD
-        if "sma" in self.config["indicators"]:
+        if self.config.get("use_indicators", True) and "sma" in self.config["indicators"]:
             self.log_action("Calculating SMA indicator...", "info")
-            sma_indicator = SMA(self.data)
+            sma_indicator = SMA(self.data, window=200, alias="SMA")
+            self.data = self.data.drop(columns=["SMA"], errors="ignore")
             self.data = self.data.join(sma_indicator.calculate())
 
-        if "ema" in self.config["indicators"]:
+        if self.config.get("use_indicators", True) and "ema" in self.config["indicators"]:
             self.log_action("Calculating EMA indicator...", "info")
-            ema_indicator = EMA(self.data)
+            ema_indicator = EMA(self.data, span=50, alias="EMA")
+            self.data = self.data.drop(columns=["EMA"], errors="ignore")
             self.data = self.data.join(ema_indicator.calculate())
 
-        if "macd" in self.config["indicators"]:
+        if self.config.get("use_indicators", True) and "macd" in self.config["indicators"]:
             self.log_action("Calculating MACD indicator...", "info")
             macd_indicator = MACD(self.data)
+            self.data = self.data.drop(columns=['MACD', 'Signal', 'MACD_Histogram'], errors="ignore")
             self.data = self.data.join(macd_indicator.calculate())
 
-        # Log indicator values for debugging
-        self.log_action(f"Indicators (last 5 rows):\n{self.data[['SMA', 'EMA', 'MACD']].tail()}", "debug")
+        # Lagi cen dla long-term (temporalne cechy)
+        for lag in [20, 60, 120, 250]:
+            self.data[f"Close_lag_{lag}"] = self.data['Close'].shift(lag)
+            self.data[f"Return_lag_{lag}"] = self.data['Close'].pct_change(lag)
+            self.data[f"Volatility_{lag}"] = self.data['Close'].pct_change().rolling(lag).std()
+            rolling_max = self.data['Close'].rolling(lag).max()
+            self.data[f"Drawdown_{lag}"] = (self.data['Close'] / rolling_max) - 1
 
-        # Prepare data for Random Forest (using Close price, SMA, EMA, and MACD as features)
-        X = self.data[['Close', 'SMA', 'EMA', 'MACD']]
-        y = self.data['Close']
+        # Target = forward 50-day return (przewidujemy przyszłość!)
+        self.data['target'] = self.data['Close'].pct_change(50).shift(-50)
 
-        # Split the data into training and test sets
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
+        # Feature columns (BEZ bieżącego Close - używamy tylko lagów i wskaźników)
+        feature_columns: List[str] = []
+        # Dodaj lagi
+        for lag in [20, 60, 120, 250]:
+            feature_columns.append(f"Close_lag_{lag}")
+            feature_columns.append(f"Return_lag_{lag}")
+            feature_columns.append(f"Volatility_{lag}")
+            feature_columns.append(f"Drawdown_{lag}")
+        # Dodaj wskaźniki
+        for col in ['SMA', 'EMA', 'MACD']:
+            if col in self.data.columns:
+                feature_columns.append(col)
 
-        # Verify shapes
-        assert len(X_train.shape) == 2, f"X_train should be 2D (samples, features), but got {X_train.shape}"
-        assert len(y_train.shape) == 1, f"y_train should be 1D (samples), but got {y_train.shape}"
+        # Dropna dla features I target
+        combined = self.data[feature_columns + ['target']].dropna()
+        if combined.empty or len(combined) < 50:
+            self.log_action("Not enough data after feature engineering; skipping execution.", "warning")
+            return
 
-        # Log data shapes for debugging
-        self.log_action(f"Shape of training data: X_train: {X_train.shape}, y_train: {y_train.shape}", "debug")
-        self.log_action(f"Shape of test data: X_test: {X_test.shape}, y_test: {y_test.shape}", "debug")
+        features = combined[feature_columns]
+        y_aligned = combined['target']
 
-        # Train the Random Forest model
-        self.log_action("Training the Random Forest model...", "info")
-        random_forest_model = RandomForestModel()
-        random_forest_model.train(X_train, y_train)
+        # Remove highly correlated / duplicate features to reduce redundancy
+        features, dropped_cols = self._deduplicate_features(features)
+        if dropped_cols:
+            self.log_action(f"Removed highly correlated features (r>0.999): {sorted(dropped_cols)}", "info")
+        feature_columns = list(features.columns)
+        baseline_mae = float(np.mean(np.abs(y_aligned)))
+        elasticnet_baseline_mae = None
+        try:
+            enet_pipeline = Pipeline(
+                steps=[
+                    ("preprocess", ColumnTransformer([("num", StandardScaler(), feature_columns)], remainder="drop")),
+                    ("model", ElasticNet(alpha=0.01, l1_ratio=0.5, max_iter=5000, random_state=self.seed)),
+                ],
+            )
+            baseline_tscv = TimeSeriesSplit(n_splits=min(5, max(2, len(features) // 60)))
+            baseline_scores = cross_val_score(
+                enet_pipeline,
+                features,
+                y_aligned,
+                cv=baseline_tscv,
+                scoring="neg_mean_absolute_error",
+                n_jobs=-1,
+            )
+            elasticnet_baseline_mae = float(np.mean(np.abs(baseline_scores)))
+        except Exception as exc:  # noqa: BLE001
+            self.log_action(f"ElasticNet baseline evaluation failed: {exc}", "warning")
 
-        # Make predictions using the test set
-        predictions = random_forest_model.predict(X_test)
+        # Pipeline factory
+        persistence = ModelPersistence()
+        pipeline_factory = lambda: Pipeline(
+            steps=[
+                ("preprocess", ColumnTransformer([("num", StandardScaler(), feature_columns)], remainder="drop")),
+                ("model", RandomForestRegressor(
+                    n_estimators=500,
+                    max_depth=12,
+                    random_state=self.seed,
+                    n_jobs=-1,
+                )),
+            ]
+        )
 
-        # Log predictions and actual values for debugging
-        self.log_action(f"First 5 predictions:\n{predictions[:5]}", "debug")
-        self.log_action(f"First 5 actual values (y_test):\n{y_test[:5].values}", "debug")
+        # Train or load pipeline (unified persistence)
+        pipeline, cv_mae = train_or_load_pipeline(
+            key=strategy_name,
+            persistence=persistence,
+            pipeline_factory=pipeline_factory,
+            X=features,
+            y=y_aligned,
+            feature_columns=feature_columns,
+            split_divisor=60,
+            metadata={
+                "baseline_mae": baseline_mae,
+                "baseline_elasticnet_mae": elasticnet_baseline_mae,
+                "train_rows": len(y_aligned),
+            },
+            config_signature_data={
+                "model": "long_term_rf_v1",
+                "fe_version": "v1",
+            },
+        )
 
-        # Compare predictions to actual values and calculate error metrics
-        mae = random_forest_model.evaluate(X_test, y_test)
-        self.log_action(f"Mean Absolute Error (MAE) on test set: {mae:.4f}", "info")
+        if cv_mae is not None:
+            self.log_action(f"Cross-validated MAE (walk-forward): {cv_mae:.4f}", "info")
 
-        # Get the last prediction and actual close price
-        last_pred = predictions[-1]
-        last_close = y_test.iloc[-1]
+        self.log_action(f"Baseline MAE (predict zero return): {baseline_mae:.4f}", "info")
+        if elasticnet_baseline_mae is not None:
+            self.log_action(f"ElasticNet baseline MAE: {elasticnet_baseline_mae:.4f}", "info")
 
-        # Calculate the difference between predicted and actual close price
-        price_diff = abs(last_pred - last_close)
-        msg = f"Predicted Price: {last_pred:.2f}, Actual Close: {last_close:.2f}"
+        # Predykcja na najnowszym wierszu (inference)
+        latest_features = features.tail(1)
+        try:
+            check_is_fitted(pipeline)
+        except Exception as exc:  # noqa: BLE001
+            self.log_action(f"Persisted pipeline not fitted or invalid: {exc}", "error")
+            return
 
-        # Define a threshold for HOLD signal (e.g., if difference is < 0.5%)
-        hold_threshold = 0.005 * last_close
+        predicted_return = float(pipeline.predict(latest_features)[0])
+        self._log_feature_importance(pipeline, feature_columns)
 
-        # Trading signal logic with SMA/EMA confirmation
-        if price_diff < hold_threshold:
+        last_close = self.data['Close'].iloc[-1]
+        msg = f"Predicted 50-day return: {predicted_return:.4f} ({predicted_return*100:.2f}%), Last Close: {last_close:.2f}"
+
+        # Threshold return dla HOLD (0.5% = mało pewna predykcja)
+        hold_threshold = 0.005
+
+        if abs(predicted_return) < hold_threshold:
             decision = "HOLD"
-            self.log_action(f"{msg} -> {decision} signal (price difference: {price_diff:.2f} < threshold: {hold_threshold:.2f})", "warning")
-            send_email(f"{decision} Signal for {asset} using {strategy_name}",
-                       f"{msg} -> {decision} signal", self.config['notification_email'])
-        elif last_pred > last_close:
+            self.log_action(f"{msg} -> {decision} signal (predicted return too small: {abs(predicted_return):.4f} < {hold_threshold})", "warning")
+        elif predicted_return > hold_threshold:
             decision = "BUY"
-            self.log_action(f"{msg} -> {decision} signal (predicted price higher and SMA/EMA support BUY)", "info")
-            send_email(f"{decision} Signal for {asset} using {strategy_name}",
-                       f"{msg} -> {decision} signal", self.config['notification_email'])
-        else:
+            self.log_action(f"{msg} -> {decision} signal (positive return expected)", "info")
+        else:  # predicted_return < -hold_threshold
             decision = "SELL"
-            self.log_action(f"{msg} -> {decision} signal (predicted price lower and SMA/EMA support SELL)", "info")
-            send_email(f"{decision} Signal for {asset} using {strategy_name}",
-                       f"{msg} -> {decision} signal", self.config['notification_email'])
+            self.log_action(f"{msg} -> {decision} signal (negative return expected)", "info")
+
+        trade_summary = self.order_executor.process_signal(asset, decision, self.data['Close'].iloc[-1], self.risk_manager)
+        if trade_summary.get("status") not in {"noop", "already_long"}:
+            self.log_action(f"Paper trade summary: {trade_summary}", "info")
+        send_email(f"{decision} Signal for {asset} using {strategy_name}", f"{msg} -> {decision} signal | trade: {trade_summary}", self.config['notification_email'])
+
+    def _deduplicate_features(self, X, threshold: float = 0.999):
+        """Drop features that are almost perfectly correlated to reduce redundancy."""
+        corr = X.fillna(0).corr().abs()
+        upper = corr.where(np.triu(np.ones(corr.shape), k=1).astype(bool))
+        to_drop = [col for col in upper.columns if any(upper[col] > threshold)]
+        if to_drop:
+            X = X.drop(columns=to_drop)
+        return X, to_drop
+
+    def _log_feature_importance(self, pipeline, feature_columns):
+        """Log top feature importances for trained RandomForest."""
+        try:
+            model = pipeline.named_steps.get("model")
+            if model is None or not hasattr(model, "feature_importances_"):
+                return
+            importances = model.feature_importances_
+            if len(importances) != len(feature_columns):
+                return
+            pairs = sorted(zip(feature_columns, importances), key=lambda p: p[1], reverse=True)
+            top = pairs[:10]
+            self.log_action(f"Top feature importances: {top}", "info")
+            zero = [name for name, imp in pairs if imp == 0]
+            if zero:
+                self.log_action(f"Zero-importance features (candidates for removal): {zero}", "warning")
+        except Exception:  # noqa: BLE001
+            return

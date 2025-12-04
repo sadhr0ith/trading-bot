@@ -1,5 +1,7 @@
 # utils/logger.py
 import logging
+import os
+
 
 class ColoredFormatter(logging.Formatter):
     COLOR_CODES = {
@@ -14,29 +16,43 @@ class ColoredFormatter(logging.Formatter):
     }
 
     def format(self, record):
-        if "BUY signal" in record.msg:
+        message = super().format(record)
+        if "BUY signal" in message:
             color = self.COLOR_CODES["BUY"]
-        elif "SELL signal" in record.msg:
+        elif "SELL signal" in message:
             color = self.COLOR_CODES["SELL"]
-        elif "HOLD signal" in record.msg:
+        elif "HOLD signal" in message:
             color = self.COLOR_CODES["HOLD"]
         else:
             color = self.COLOR_CODES.get(record.levelname, self.COLOR_CODES["RESET"])
-        
+
         reset = self.COLOR_CODES["RESET"]
-        record.msg = f"{color}{record.msg}{reset}"
-        return super().format(record)
+        return f"{color}{message}{reset}"
 
-def setup_logger(name):
+
+def _resolve_level(level):
+    env_level = os.getenv("TRADING_BOT_LOG_LEVEL")
+    if level is None:
+        level = env_level
+
+    if isinstance(level, str):
+        level = level.upper()
+        return getattr(logging, level, logging.INFO)
+    if isinstance(level, int):
+        return level
+    return logging.INFO
+
+
+def setup_logger(name, level=None):
     logger = logging.getLogger(name)
+    resolved_level = _resolve_level(level)
 
-    # Check if the logger already has handlers to prevent duplicate logs
     if not logger.hasHandlers():
         formatter = ColoredFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
         handler = logging.StreamHandler()
         handler.setFormatter(formatter)
         logger.addHandler(handler)
 
-    # Set the logging level (you can adjust this based on the required level)
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(resolved_level)
+    logger.propagate = False
     return logger

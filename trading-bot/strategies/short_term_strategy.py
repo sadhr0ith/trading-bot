@@ -11,6 +11,7 @@ from sklearn.utils.validation import check_is_fitted
 from xgboost import XGBRegressor
 
 from .strategy_base import StrategyBase
+from core.exceptions import InsufficientDataError
 from indicators.macd import MACD
 from indicators.rsi import RSI
 from indicators.adx import ADX
@@ -73,12 +74,10 @@ class ShortTermStrategy(StrategyBase):
         # Safety margin: 25 rows minimum (20 for history + 5 buffer)
         MIN_INFERENCE_ROWS = 25
         if len(data) < MIN_INFERENCE_ROWS:
-            self.log_action(
-                f"Insufficient data for inference: need {MIN_INFERENCE_ROWS}+ rows, have {len(data)}. "
-                f"Lag/rolling features require historical context.",
-                "error"
+            raise InsufficientDataError(
+                f"Need at least {MIN_INFERENCE_ROWS} rows for inference, got {len(data)}. "
+                f"Lag/rolling features require historical context."
             )
-            return
 
         # Clean split: last MIN_INFERENCE_ROWS are out-of-sample (NOT in training)
         split_idx = len(data) - MIN_INFERENCE_ROWS
@@ -94,8 +93,9 @@ class ShortTermStrategy(StrategyBase):
         )
 
         if len(data_train) < 50:
-            self.log_action("Not enough training data after removing missing targets.", "warning")
-            return
+            raise InsufficientDataError(
+                f"Not enough training data after removing missing targets: got {len(data_train)}, need at least 50"
+            )
 
         if len(data_train) < 80:
             self.log_action("Small dataset detected (<80 rows); using ElasticNet fallback for sanity.", "warning")

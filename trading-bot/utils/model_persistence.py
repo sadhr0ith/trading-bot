@@ -8,6 +8,7 @@ from typing import Any, Dict, Optional
 import joblib
 from pydantic import ValidationError as PydanticValidationError
 
+from core.exceptions import ModelPersistenceError
 from models.persistence import PersistenceMetadata
 from utils.logger import setup_logger
 
@@ -108,10 +109,14 @@ class ModelPersistence:
         if is_keras:
             try:
                 from tensorflow import keras  # type: ignore
-            except Exception:  # noqa: BLE001
-                self.logger.error("TensorFlow/Keras not available; cannot load persisted Keras model.")
-                return None
-            model = keras.models.load_model(artifact_path)
+            except ImportError as exc:
+                raise ModelPersistenceError(
+                    "TensorFlow/Keras not available; cannot load persisted Keras model."
+                ) from exc
+            try:
+                model = keras.models.load_model(artifact_path)
+            except Exception as exc:  # noqa: BLE001
+                raise ModelPersistenceError(f"Failed to load Keras model from {artifact_path}: {exc}") from exc
             scaler = None
             if scaler_path and scaler_path.exists():
                 scaler = joblib.load(scaler_path).get("scaler")

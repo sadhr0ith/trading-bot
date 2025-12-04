@@ -3,6 +3,7 @@ import time
 from datetime import datetime, timedelta
 
 from config_handler import get_sleep_duration, load_config
+from core.exceptions import InsufficientDataError, ModelPersistenceError, TradingBotError
 from data_fetcher import fetch_data_online
 from strategy_manager import select_strategy
 from utils.model_persistence import ModelPersistence
@@ -85,8 +86,29 @@ def run_trading_bot(strategy):
             strategy_instance = select_strategy(config, data)
             strategy_instance.execute()
 
+        except InsufficientDataError as exc:
+            logger.warning(f"Insufficient data for strategy execution: {exc}")
+            logger.info(f"Sleeping for {timedelta(seconds=current_backoff_seconds)} before retrying with more data.")
+            time.sleep(current_backoff_seconds)
+            current_backoff_seconds = min(current_backoff_seconds * 2, max_backoff_seconds)
+            continue
+
+        except ModelPersistenceError as exc:
+            logger.error(f"Model persistence error: {exc}")
+            logger.info(f"Sleeping for {timedelta(seconds=current_backoff_seconds)} before retrying.")
+            time.sleep(current_backoff_seconds)
+            current_backoff_seconds = min(current_backoff_seconds * 2, max_backoff_seconds)
+            continue
+
+        except TradingBotError as exc:
+            logger.error(f"Trading bot error: {exc}")
+            logger.info(f"Sleeping for {timedelta(seconds=current_backoff_seconds)} before retrying.")
+            time.sleep(current_backoff_seconds)
+            current_backoff_seconds = min(current_backoff_seconds * 2, max_backoff_seconds)
+            continue
+
         except Exception as exc:  # noqa: BLE001
-            logger.error(f"Unhandled error in main loop: {exc}", exc_info=True)
+            logger.error(f"Unexpected error in main loop: {exc}", exc_info=True)
             logger.info(f"Sleeping for {timedelta(seconds=current_backoff_seconds)} before retrying.")
             time.sleep(current_backoff_seconds)
             current_backoff_seconds = min(current_backoff_seconds * 2, max_backoff_seconds)

@@ -1,4 +1,5 @@
 import time
+import hashlib
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -161,8 +162,9 @@ def _get_klines_with_retry(client, ticker, interval, start_time_ms, batch_size, 
 def _cache_paths(source: str, ticker: str, period: str, interval: str):
     cache_dir = Path("cache")
     cache_dir.mkdir(parents=True, exist_ok=True)
-    key = f"{source}_{ticker}_{period}_{interval}".replace("/", "_")
-    return cache_dir / f"{key}.pkl"
+    raw_key = f"{source}:{ticker}:{period}:{interval}"
+    key_hash = hashlib.md5(raw_key.encode("utf-8")).hexdigest()
+    return cache_dir / f"{key_hash}.pkl"
 
 
 def _load_cache(path: Path, ttl_seconds: int):

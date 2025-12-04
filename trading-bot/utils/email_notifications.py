@@ -40,8 +40,8 @@ def send_email(subject: str, body: str, to_email: str | Iterable[str]) -> bool:
     from_email = email_settings.sender_email
     app_password = email_settings.app_password
 
-    smtp_server = "smtp.gmail.com"
-    smtp_port = 587
+    smtp_server = email_settings.smtp_server
+    smtp_port = email_settings.smtp_port
 
     msg = MIMEMultipart()
     msg["From"] = from_email

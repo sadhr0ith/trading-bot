@@ -18,6 +18,8 @@ class BinanceSettings(BaseSettings):
 class EmailSettings(BaseSettings):
     sender_email: EmailStr = Field(..., env="GMAIL_SENDER_EMAIL")
     app_password: str = Field(..., env="GMAIL_APP_PASSWORD")
+    smtp_server: str = Field("smtp.gmail.com", env="SMTP_SERVER")
+    smtp_port: int = Field(587, env="SMTP_PORT")
 
     class Config:
         extra = "ignore"

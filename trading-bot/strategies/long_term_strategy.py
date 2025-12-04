@@ -164,19 +164,20 @@ class LongTermStrategy(StrategyBase):
         last_close = data["Close"].iloc[-1]
         msg = f"Predicted 50-day return: {predicted_return:.4f} ({predicted_return*100:.2f}%), Last Close: {last_close:.2f}"
 
-        # Threshold return dla HOLD (0.5% = mało pewna predykcja)
-        hold_threshold = 0.005
+        # Get thresholds from config (default: 0.5% = 0.005)
+        buy_threshold = self.config.get("buy_threshold", 0.005)
+        sell_threshold = self.config.get("sell_threshold", -0.005)
 
-        if abs(predicted_return) < hold_threshold:
+        if abs(predicted_return) < buy_threshold:
             decision = "HOLD"
             self.log_action(
-                f"{msg} -> {decision} signal (predicted return too small: {abs(predicted_return):.4f} < {hold_threshold})",
+                f"{msg} -> {decision} signal (predicted return too small: {abs(predicted_return):.4f} < {buy_threshold})",
                 "warning",
             )
-        elif predicted_return > hold_threshold:
+        elif predicted_return > buy_threshold:
             decision = "BUY"
             self.log_action(f"{msg} -> {decision} signal (positive return expected)", "info")
-        else:  # predicted_return < -hold_threshold
+        else:  # predicted_return < sell_threshold
             decision = "SELL"
             self.log_action(f"{msg} -> {decision} signal (negative return expected)", "info")
 

@@ -218,12 +218,16 @@ class MidTermStrategy(StrategyBase):
         last_close = data["Close"].iloc[-1]
         msg = f"Predicted 20-day return: {predicted_return:.4f}, last close: {last_close:.2f}"
 
-        if predicted_return > 0.02:
+        # Get thresholds from config (default: 2% = 0.02)
+        buy_threshold = self.config.get("buy_threshold", 0.02)
+        sell_threshold = self.config.get("sell_threshold", -0.02)
+
+        if predicted_return > buy_threshold:
             decision = "BUY"
-            reason = "expected return above 2%"
-        elif predicted_return < -0.02:
+            reason = f"expected return above {buy_threshold*100:.1f}%"
+        elif predicted_return < sell_threshold:
             decision = "SELL"
-            reason = "expected return below -2%"
+            reason = f"expected return below {sell_threshold*100:.1f}%"
         else:
             decision = "HOLD"
             reason = "expected return within threshold"

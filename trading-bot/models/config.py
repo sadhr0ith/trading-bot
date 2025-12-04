@@ -53,6 +53,11 @@ class StrategyConfig(_DictLikeModel):
     risk_management: RiskConfig = RiskConfig()
     min_rows: int | None = None
 
+    # Decision thresholds (strategy-specific, can be overridden)
+    buy_threshold: float | None = None
+    sell_threshold: float | None = None
+    min_inference_rows: int | None = None
+
     @validator("strategy")
     def _validate_strategy(cls, value):
         if value not in ALLOWED_STRATEGIES:

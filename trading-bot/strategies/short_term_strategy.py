@@ -70,7 +70,7 @@ class ShortTermStrategy(StrategyBase):
         # Validate minimum data requirement for inference
         # Lag transformers need: max(lags)=10, Rolling needs: max(windows)=10
         # Safety margin: 25 rows minimum (20 for history + 5 buffer)
-        MIN_INFERENCE_ROWS = 25
+        MIN_INFERENCE_ROWS = self.config.get("min_inference_rows", 25)
         if len(data) < MIN_INFERENCE_ROWS:
             raise InsufficientDataError(
                 f"Need at least {MIN_INFERENCE_ROWS} rows for inference, got {len(data)}. "
@@ -278,19 +278,22 @@ class ShortTermStrategy(StrategyBase):
         last_macd = data["MACD"].iloc[-1] if "MACD" in data.columns else None
         last_signal = data["Signal"].iloc[-1] if "Signal" in data.columns else None
 
-        hold_threshold = 0.005
+        # Get thresholds from config (default: 0.5% = 0.005)
+        buy_threshold = self.config.get("buy_threshold", 0.005)
+        sell_threshold = self.config.get("sell_threshold", -0.005)
+
         msg = f"Predicted 5-day return: {predicted_return:.4f}"
         if last_macd is not None and last_signal is not None:
             msg += f", MACD: {last_macd:.4f}, Signal: {last_signal:.4f}"
 
-        if predicted_return > hold_threshold and (last_macd is None or last_macd > last_signal):
+        if predicted_return > buy_threshold and (last_macd is None or last_macd > last_signal):
             decision = "BUY"
             reason = (
                 "positive expected return with MACD confirmation"
                 if last_macd is not None
                 else "positive expected return"
             )
-        elif predicted_return < -hold_threshold and (last_macd is None or last_macd < last_signal):
+        elif predicted_return < sell_threshold and (last_macd is None or last_macd < last_signal):
             decision = "SELL"
             reason = (
                 "negative expected return with MACD confirmation"

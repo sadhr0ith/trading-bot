@@ -1506,20 +1506,30 @@ def function_name(arg1: str, arg2: int) -> bool:
 ---
 
 ### P2-3: Magic Numbers - Move to Config
-**Status:** ❌ Do zrobienia
+**Status:** ✅ Zrobione
 **Priorytet:** 🟢 MODERATE
 **Effort:** 1 godzina
 
-*(do zaimplementowania)*
+**Zmiany:**
+- Dodano do `StrategyConfig`: `buy_threshold`, `sell_threshold`, `min_inference_rows`
+- `short_term_strategy.py`: używa `config.get("buy_threshold", 0.005)` i `config.get("sell_threshold", -0.005)`
+- `mid_term_strategy.py`: używa `config.get("buy_threshold", 0.02)` i `config.get("sell_threshold", -0.02)`
+- `long_term_strategy.py`: używa `config.get("buy_threshold", 0.005)` i `config.get("sell_threshold", -0.005)`
+- `min_inference_rows` w short_term: `config.get("min_inference_rows", 25)`
+- Wszystkie thresholdy są teraz konfigurowalne przez strategy config z rozsądnymi defaultami
 
 ---
 
 ### P2-4: Email - Configurable SMTP
-**Status:** ❌ Do zrobienia
+**Status:** ✅ Zrobione (było już wcześniej)
 **Priorytet:** 🟢 MODERATE
 **Effort:** 30 minut
 
-*(do zaimplementowania)*
+**Weryfikacja:**
+- `EmailSettings` w `models/env_settings.py` już ma `smtp_server` i `smtp_port` z ENV
+- Defaults: `smtp.gmail.com:587`
+- `.env.example` już zawiera `SMTP_SERVER` i `SMTP_PORT`
+- `email_notifications.py` używa `load_email_settings()` - w pełni konfigurowalny
 
 ---
 
@@ -1620,19 +1630,19 @@ def function_name(arg1: str, arg2: int) -> bool:
 - Sprint 0 (BUGS): 5/5 ✅ (100%)
 - Sprint 1 (P0): 5/5 ✅ (100%)
 - Sprint 2 (P1): 4/4 ✅ (100%)
-- Sprint 3 (P2): 4/10 (40%)
+- Sprint 3 (P2): 6/10 (60%)
   - ✅ P2-1: Trailing Stop
+  - ✅ P2-3: Magic numbers → config
+  - ✅ P2-4: Configurable SMTP (było już)
   - ✅ P2-6: Clean .gitignore
   - ✅ P2-8: Package structure (__init__.py)
   - ✅ P2-10: Graceful shutdown (SIGTERM)
   - ❌ P2-2: Feature engineering (common code)
-  - ❌ P2-3: Magic numbers → config
-  - ❌ P2-4: Configurable SMTP
   - ❌ P2-5: Better cache keys
   - ❌ P2-7: Binance incremental fetch
   - ❌ P2-9: Absolute paths + file locking
 
-**Total: 18/24 (75%)**
+**Total: 20/24 (83%)**
 
 ---
 

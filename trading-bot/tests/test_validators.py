@@ -22,3 +22,11 @@ def test_data_validator_flags_missing_columns():
     result = DataValidator().validate(df)
     assert not result.is_valid
     assert any("Missing required columns" in err for err in result.errors)
+
+
+def test_data_validator_missing_columns_returns_none_data():
+    """Validator should fail fast and not return a mutated dataframe when columns are missing."""
+    df = pd.DataFrame({"Price": [1, 2, 3]})
+    result = DataValidator(require_ohlcv=True).validate(df)
+    assert result.is_valid is False
+    assert result.data is None

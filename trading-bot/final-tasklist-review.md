@@ -1579,11 +1579,22 @@ def function_name(arg1: str, arg2: int) -> bool:
 ---
 
 ### P2-7: Binance - Incremental Fetch
-**Status:** ❌ Do zrobienia
+**Status:** ✅ Zrobione
 **Priorytet:** 🟢 MODERATE
 **Effort:** 2 godziny
 
-*(do zaimplementowania)*
+**Zmiany:**
+- Wyekstraktowano `_binance_klines_to_dataframe()` - wspólna logika konwersji do DataFrame
+- Dodano `fetch_binance_klines_since()` - fetch od konkretnego timestamp
+- Zaktualizowano `fetch_binance_data()` z parametrem `enable_incremental=True`:
+  - Ładuje cache jeśli dostępny
+  - Pobiera tylko nowe dane od ostatniego timestamp z cache
+  - Scala z cached data (deduplikacja, sortowanie)
+  - Przycina do żądanego period
+  - Zapisuje zaktualizowany cache
+  - Fallback do full fetch jeśli brak cache
+  - Fallback do stale cache przy błędzie API
+- **Korzyści**: drastyczna redukcja API calls, lepsza wydajność, mniej rate limit issues
 
 ---
 
@@ -1646,19 +1657,19 @@ def function_name(arg1: str, arg2: int) -> bool:
 - Sprint 0 (BUGS): 5/5 ✅ (100%)
 - Sprint 1 (P0): 5/5 ✅ (100%)
 - Sprint 2 (P1): 4/4 ✅ (100%)
-- Sprint 3 (P2): 8/10 (80%)
+- Sprint 3 (P2): 9/10 (90%)
   - ✅ P2-1: Trailing Stop
   - ✅ P2-2: Feature engineering (common code)
   - ✅ P2-3: Magic numbers → config
   - ✅ P2-4: Configurable SMTP (było już)
   - ✅ P2-5: Better cache keys
   - ✅ P2-6: Clean .gitignore
+  - ✅ P2-7: Binance incremental fetch
   - ✅ P2-8: Package structure (__init__.py)
   - ✅ P2-10: Graceful shutdown (SIGTERM)
-  - ❌ P2-7: Binance incremental fetch
   - ❌ P2-9: Absolute paths + file locking
 
-**Total: 22/24 (91.7%)**
+**Total: 23/24 (95.8%)**
 
 ---
 

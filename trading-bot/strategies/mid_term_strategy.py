@@ -21,26 +21,26 @@ from .strategy_base import StrategyBase
 class MidTermStrategy(StrategyBase):
     """Mid-term (20-day) RandomForest on lag/return/vol/drawdown features with indicator add-ons and correlation pruning."""
 
-    def execute(self):
-        if self.data is None or self.data.empty:
-            self.log_action("Input data frame is empty; skipping execution.", "warning")
-            return
+    MIN_ROWS = 50
 
-        asset = self.config.get("ticker", "UNKNOWN")
-        self.log_action("Executing mid-term trading strategy with Random Forest", "info")
-        data = self.data.copy().sort_index()
-
+    def _add_indicators(self, data):
+        out = data.copy()
         if self.config.get("use_indicators", True) and "macd" in self.config.get("indicators", []):
             self.log_action("Calculating MACD indicator...", "info")
-            macd_indicator = MACD(data)
-            data = data.drop(columns=["MACD", "Signal", "MACD_Histogram"], errors="ignore")
-            data = data.join(macd_indicator.calculate())
+            macd_indicator = MACD(out)
+            out = out.drop(columns=["MACD", "Signal", "MACD_Histogram"], errors="ignore")
+            out = out.join(macd_indicator.calculate())
 
         if self.config.get("use_indicators", True) and "bollinger_bands" in self.config.get("indicators", []):
             self.log_action("Calculating Bollinger Bands indicator...", "info")
-            bb_indicator = BollingerBands(data)
-            data = data.drop(columns=["BB_Middle", "BB_Upper", "BB_Lower", "BB_Width"], errors="ignore")
-            data = data.join(bb_indicator.calculate())
+            bb_indicator = BollingerBands(out)
+            out = out.drop(columns=["BB_Middle", "BB_Upper", "BB_Lower", "BB_Width"], errors="ignore")
+            out = out.join(bb_indicator.calculate())
+        return out
+
+    def _run_strategy(self, data):
+        asset = self.config.get("ticker", "UNKNOWN")
+        self.log_action("Executing mid-term trading strategy with Random Forest", "info")
 
         for lag in [5, 10, 20, 60, 120]:
             data[f"Close_lag_{lag}"] = data["Close"].shift(lag)

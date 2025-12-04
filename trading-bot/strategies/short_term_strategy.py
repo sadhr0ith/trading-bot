@@ -48,18 +48,16 @@ class ShortTermStrategy(StrategyBase):
     - Decision threshold: ±0.5% with MACD confirmation
     """
 
-    def execute(self):
+    MIN_ROWS = 25
+
+    def _add_indicators(self, data):
+        return self._apply_configured_indicators(data)
+
+    def _run_strategy(self, data):
         asset = self.config["ticker"]
         strategy_name = self.config["strategy"]
 
         self.log_action(f"Executing short-term strategy for {asset} using XGBoost", "info")
-        data = self.data.copy().sort_index()
-
-        if data is None or data.empty:
-            self.log_action("Input data frame is empty; skipping execution.", "warning")
-            return
-
-        data = self._apply_configured_indicators(data)
         data["target"] = data["Close"].pct_change(5).shift(-5)
 
         if len(data) < 50:

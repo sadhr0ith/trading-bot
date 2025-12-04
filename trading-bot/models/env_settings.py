@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import TypeVar
 
-from pydantic import BaseSettings, EmailStr, Field, ValidationError
+from pydantic import EmailStr, Field, ValidationError
+from pydantic_settings import BaseSettings
 
 T = TypeVar("T", bound=BaseSettings)
 

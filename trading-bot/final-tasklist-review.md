@@ -884,7 +884,7 @@ Wskaźniki modyfikują `self.data` in-place, co powoduje side effects trudne do 
 ## 🟡 SPRINT 2: HIGH Priority (P1) - 2 tygodnie (~3 dni)
 
 ### P1-1: Template Method Pattern Refactoring
-**Status:** ❌ Do zrobienia
+**Status:** ✅ Zrobione
 **Priorytet:** 🟡 HIGH
 **Effort:** 6 godzin
 **Zależności:** BUG-2 (bo dotyczy tego samego kodu)
@@ -1082,7 +1082,7 @@ Wskaźniki modyfikują `self.data` in-place, co powoduje side effects trudne do 
 ---
 
 ### P1-2: Measure & Increase Test Coverage
-**Status:** ❌ Do zrobienia
+**Status:** ✅ Zrobione (baseline + smoke tests)
 **Priorytet:** 🟡 HIGH
 **Effort:** 2-3 dni (incremental)
 **Zależności:** P0-3 (pytest-cov)
@@ -1254,7 +1254,7 @@ Wskaźniki modyfikują `self.data` in-place, co powoduje side effects trudne do 
 ---
 
 ### P1-3: Add Type Hints to Public Functions
-**Status:** ❌ Do zrobienia
+**Status:** ✅ Zrobione
 **Priorytet:** 🟡 HIGH
 **Effort:** 4 godzin (incremental)
 **Zależności:** P0-3 (mypy)
@@ -1375,7 +1375,7 @@ Wskaźniki modyfikują `self.data` in-place, co powoduje side effects trudne do 
 ---
 
 ### P1-4: Add Docstrings to Public Functions
-**Status:** ❌ Do zrobienia
+**Status:** ✅ Zrobione
 **Priorytet:** 🟡 HIGH
 **Effort:** 3 godziny (incremental)
 **Zależności:** Żadne
@@ -1502,10 +1502,10 @@ def function_name(arg1: str, arg2: int) -> bool:
 ### Completed Tasks
 - Sprint 0 (BUGS): 5/5 ✅ (100%)
 - Sprint 1 (P0): 5/5 ✅ (100%)
-- Sprint 2 (P1): 0/4 (0%)
+- Sprint 2 (P1): 4/4 ✅ (100%)
 - Sprint 3 (P2): 0/10 (0%)
 
-**Total: 10/24 (42%)**
+**Total: 14/24 (58%)**
 
 ---
 

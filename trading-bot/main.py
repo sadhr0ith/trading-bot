@@ -35,9 +35,9 @@ def _warn_on_config_drift(strategy_name, config):
         logger.warning("Config drift detected: runtime config differs from persisted model metadata.")
 
 
-def run_trading_bot(strategy):
+def run_trading_bot(strategy: str):
     """
-    Main loop to run the bot continuously, updating data and retraining models.
+    Run the trading bot loop for the given strategy: load config, validate, fetch data, execute strategy with backoff.
     """
     config = load_config(strategy)
     if config is None:

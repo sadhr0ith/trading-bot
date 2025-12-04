@@ -20,42 +20,42 @@ from .strategy_base import StrategyBase
 
 class LongTermStrategy(StrategyBase):
     """Long-term (50-day) RandomForest using long lags, return/vol/drawdown features, indicators, and correlation pruning."""
+    MIN_ROWS = 50
 
-    def execute(self):
+    def _run_strategy(self, data):
         asset = self.config["ticker"]
         strategy_name = self.config["strategy"]
 
         self.log_action(f"Executing long-term strategy for {asset} using Random Forest and SMA/EMA", "info")
-        self.data = self.data.sort_index()
 
         if self.config.get("use_indicators", True) and "sma" in self.config["indicators"]:
             self.log_action("Calculating SMA indicator...", "info")
-            sma_indicator = SMA(self.data, window=200, alias="SMA")
-            self.data = self.data.drop(columns=["SMA"], errors="ignore")
-            self.data = self.data.join(sma_indicator.calculate())
+            sma_indicator = SMA(data, window=200, alias="SMA")
+            data = data.drop(columns=["SMA"], errors="ignore")
+            data = data.join(sma_indicator.calculate())
 
         if self.config.get("use_indicators", True) and "ema" in self.config["indicators"]:
             self.log_action("Calculating EMA indicator...", "info")
-            ema_indicator = EMA(self.data, span=50, alias="EMA")
-            self.data = self.data.drop(columns=["EMA"], errors="ignore")
-            self.data = self.data.join(ema_indicator.calculate())
+            ema_indicator = EMA(data, span=50, alias="EMA")
+            data = data.drop(columns=["EMA"], errors="ignore")
+            data = data.join(ema_indicator.calculate())
 
         if self.config.get("use_indicators", True) and "macd" in self.config["indicators"]:
             self.log_action("Calculating MACD indicator...", "info")
-            macd_indicator = MACD(self.data)
-            self.data = self.data.drop(columns=["MACD", "Signal", "MACD_Histogram"], errors="ignore")
-            self.data = self.data.join(macd_indicator.calculate())
+            macd_indicator = MACD(data)
+            data = data.drop(columns=["MACD", "Signal", "MACD_Histogram"], errors="ignore")
+            data = data.join(macd_indicator.calculate())
 
         # Lagi cen dla long-term (temporalne cechy)
         for lag in [20, 60, 120, 250]:
-            self.data[f"Close_lag_{lag}"] = self.data["Close"].shift(lag)
-            self.data[f"Return_lag_{lag}"] = self.data["Close"].pct_change(lag)
-            self.data[f"Volatility_{lag}"] = self.data["Close"].pct_change().rolling(lag).std()
-            rolling_max = self.data["Close"].rolling(lag).max()
-            self.data[f"Drawdown_{lag}"] = (self.data["Close"] / rolling_max) - 1
+            data[f"Close_lag_{lag}"] = data["Close"].shift(lag)
+            data[f"Return_lag_{lag}"] = data["Close"].pct_change(lag)
+            data[f"Volatility_{lag}"] = data["Close"].pct_change().rolling(lag).std()
+            rolling_max = data["Close"].rolling(lag).max()
+            data[f"Drawdown_{lag}"] = (data["Close"] / rolling_max) - 1
 
         # Target = forward 50-day return (przewidujemy przyszłość!)
-        self.data["target"] = self.data["Close"].pct_change(50).shift(-50)
+        data["target"] = data["Close"].pct_change(50).shift(-50)
 
         # Feature columns (BEZ bieżącego Close - używamy tylko lagów i wskaźników)
         feature_columns: list[str] = []
@@ -67,11 +67,11 @@ class LongTermStrategy(StrategyBase):
             feature_columns.append(f"Drawdown_{lag}")
         # Dodaj wskaźniki
         for col in ["SMA", "EMA", "MACD"]:
-            if col in self.data.columns:
+            if col in data.columns:
                 feature_columns.append(col)
 
         # Dropna dla features I target
-        combined = self.data[feature_columns + ["target"]].dropna()
+        combined = data[feature_columns + ["target"]].dropna()
         if combined.empty or len(combined) < 50:
             self.log_action("Not enough data after feature engineering; skipping execution.", "warning")
             return
@@ -161,7 +161,7 @@ class LongTermStrategy(StrategyBase):
         predicted_return = float(pipeline.predict(latest_features)[0])
         self._log_feature_importance(pipeline, feature_columns)
 
-        last_close = self.data["Close"].iloc[-1]
+        last_close = data["Close"].iloc[-1]
         msg = f"Predicted 50-day return: {predicted_return:.4f} ({predicted_return*100:.2f}%), Last Close: {last_close:.2f}"
 
         # Threshold return dla HOLD (0.5% = mało pewna predykcja)
@@ -180,9 +180,7 @@ class LongTermStrategy(StrategyBase):
             decision = "SELL"
             self.log_action(f"{msg} -> {decision} signal (negative return expected)", "info")
 
-        trade_summary = self.order_executor.process_signal(
-            asset, decision, self.data["Close"].iloc[-1], self.risk_manager
-        )
+        trade_summary = self.order_executor.process_signal(asset, decision, data["Close"].iloc[-1], self.risk_manager)
         if trade_summary.get("status") not in {"noop", "already_long"}:
             self.log_action(f"Paper trade summary: {trade_summary}", "info")
         send_email(

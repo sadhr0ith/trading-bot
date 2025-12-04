@@ -15,6 +15,7 @@ from utils.strategy_helpers import _build_config_signature
 
 class DayTradingStrategy(StrategyBase):
     SEQ_LEN = 60
+    MIN_ROWS = 60
 
     @staticmethod
     def _create_sequences(values: np.ndarray, targets: np.ndarray, seq_len: int):
@@ -70,12 +71,11 @@ class DayTradingStrategy(StrategyBase):
         )
         return decision
 
-    def execute(self):
+    def _run_strategy(self, data):
         asset = self.config["ticker"]
         strategy_name = self.config["strategy"]
 
         self.log_action(f"Executing {strategy_name} strategy for {asset} using LSTM model", "info")
-        data = self.data.copy().sort_index()
         recent_data = data.tail(720)
         if recent_data.empty:
             self.log_action("Recent data empty; skipping execution.", "warning")

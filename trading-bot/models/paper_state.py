@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field, validator
 
@@ -10,9 +9,9 @@ class PositionState(BaseModel):
     symbol: str
     entry_price: float
     size: float
-    stop_loss: Optional[float] = None
-    take_profit: Optional[float] = None
-    entry_notional: Optional[float] = None
+    stop_loss: float | None = None
+    take_profit: float | None = None
+    entry_notional: float | None = None
     opened_at: datetime
 
 
@@ -22,8 +21,8 @@ class TradeRecord(BaseModel):
     price: float
     size: float
     timestamp: datetime
-    pnl: Optional[float] = None
-    reason: Optional[str] = None
+    pnl: float | None = None
+    reason: str | None = None
 
     @validator("action")
     def _validate_action(cls, value):
@@ -34,9 +33,9 @@ class TradeRecord(BaseModel):
 
 class PaperState(BaseModel):
     balance: float
-    positions: Dict[str, PositionState] = Field(default_factory=dict)
-    history: List[TradeRecord] = Field(default_factory=list)
-    strategy_name: Optional[str] = None
+    positions: dict[str, PositionState] = Field(default_factory=dict)
+    history: list[TradeRecord] = Field(default_factory=list)
+    strategy_name: str | None = None
 
     class Config:
         extra = "ignore"

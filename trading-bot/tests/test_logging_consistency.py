@@ -4,9 +4,9 @@ import logging
 import re
 from io import StringIO
 
-from utils.logger import setup_logger
-from data_fetcher import logger as data_fetcher_logger
 from config_handler import logger as config_handler_logger
+from data_fetcher import logger as data_fetcher_logger
+from utils.logger import setup_logger
 
 
 def test_logger_format_consistency():
@@ -82,6 +82,7 @@ def test_logger_propagate_false():
 def test_logger_reuse():
     """Test 10.5: Verify calling setup_logger twice returns same logger instance."""
     import uuid
+
     unique_name = f"ReuseTest_{uuid.uuid4().hex[:8]}"
 
     # First call

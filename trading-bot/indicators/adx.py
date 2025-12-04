@@ -12,12 +12,12 @@ class ADX(IndicatorBase):
 
     def calculate(self) -> pd.DataFrame:
         df = self.data.copy()
-        if df.empty or 'High' not in df or 'Low' not in df or 'Close' not in df:
+        if df.empty or "High" not in df or "Low" not in df or "Close" not in df:
             return pd.DataFrame(index=df.index)
 
-        high = df['High']
-        low = df['Low']
-        close = df['Close']
+        high = df["High"]
+        low = df["Low"]
+        close = df["Close"]
 
         plus_dm = (high.diff()).clip(lower=0)
         minus_dm = (-low.diff()).clip(lower=0)
@@ -35,7 +35,7 @@ class ADX(IndicatorBase):
         adx = dx.ewm(alpha=1 / self.window, adjust=False).mean()
 
         out = pd.DataFrame(index=df.index)
-        out['Plus_DI'] = plus_di
-        out['Minus_DI'] = minus_di
-        out['ADX'] = adx
+        out["Plus_DI"] = plus_di
+        out["Minus_DI"] = minus_di
+        out["ADX"] = adx
         return out

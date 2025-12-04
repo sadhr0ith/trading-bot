@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional
 
 from models.paper_state import PaperState
 from utils.logger import setup_logger
@@ -13,9 +12,9 @@ from utils.risk_management import Position, RiskManager
 class PaperTradingExecutor:
     def __init__(
         self,
-        state_path: Optional[Path | str] = None,
+        state_path: Path | str | None = None,
         initial_balance: float = 100_000.0,
-        strategy_name: Optional[str] = None,
+        strategy_name: str | None = None,
     ):
         # Generate default path based on strategy name if not provided
         if state_path is None:
@@ -30,10 +29,10 @@ class PaperTradingExecutor:
         self.logger = setup_logger(self.__class__.__name__)
         self.state = self._load_state()
 
-    def _load_state(self) -> Dict:
+    def _load_state(self) -> dict:
         if self.state_path.exists():
             try:
-                with open(self.state_path, "r", encoding="utf-8") as f:
+                with open(self.state_path, encoding="utf-8") as f:
                     state = json.load(f)
 
                 # Validate strategy_name if both are present
@@ -56,7 +55,7 @@ class PaperTradingExecutor:
                 return self._create_initial_state()
         return self._create_initial_state()
 
-    def _create_initial_state(self) -> Dict:
+    def _create_initial_state(self) -> dict:
         """Create initial state with strategy_name if provided."""
         state = {"balance": self.initial_balance, "positions": {}, "history": []}
         if self.strategy_name:
@@ -68,15 +67,20 @@ class PaperTradingExecutor:
             validated = PaperState.parse_obj(self.state)
         except Exception as exc:  # noqa: BLE001
             self.logger.error(f"Paper trading state failed validation before save: {exc}")
-            validated = PaperState(balance=self.state.get("balance", self.initial_balance), positions={}, history=[], strategy_name=self.strategy_name)
+            validated = PaperState(
+                balance=self.state.get("balance", self.initial_balance),
+                positions={},
+                history=[],
+                strategy_name=self.strategy_name,
+            )
         self.state_path.parent.mkdir(parents=True, exist_ok=True)
         with open(self.state_path, "w", encoding="utf-8") as f:
             json.dump(validated.dict(), f, indent=2, default=str)
 
-    def _current_position(self, symbol: str) -> Optional[Dict]:
+    def _current_position(self, symbol: str) -> dict | None:
         return self.state.get("positions", {}).get(symbol)
 
-    def _close_position(self, symbol: str, price: float, reason: str, risk_manager: RiskManager) -> Dict:
+    def _close_position(self, symbol: str, price: float, reason: str, risk_manager: RiskManager) -> dict:
         position = self._current_position(symbol)
         if not position:
             return {"status": "no_position"}
@@ -110,12 +114,12 @@ class PaperTradingExecutor:
         self._save_state()
         return {"status": "closed", "pnl": pnl, "reason": reason}
 
-    def process_signal(self, symbol: str, signal: str, price: float, risk_manager: RiskManager) -> Dict:
+    def process_signal(self, symbol: str, signal: str, price: float, risk_manager: RiskManager) -> dict:
         """
         Execute BUY/SELL/HOLD in paper-trading mode with simple risk controls.
         """
         position = self._current_position(symbol)
-        summary: Dict = {"status": "noop", "balance": self.state["balance"]}
+        summary: dict = {"status": "noop", "balance": self.state["balance"]}
 
         if signal == "BUY":
             if position:
@@ -132,9 +136,7 @@ class PaperTradingExecutor:
 
             # Validate sufficient balance before executing
             if self.state["balance"] < notional + fee:
-                self.logger.error(
-                    f"Insufficient balance: need {notional + fee:.2f}, have {self.state['balance']:.2f}"
-                )
+                self.logger.error(f"Insufficient balance: need {notional + fee:.2f}, have {self.state['balance']:.2f}")
                 summary["status"] = "insufficient_balance"
                 return summary
 

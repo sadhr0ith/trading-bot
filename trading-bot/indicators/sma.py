@@ -1,12 +1,12 @@
 # indicators/sma.py
+
 import pandas as pd
-from typing import Optional
 
 from indicators.indicator_base import IndicatorBase
 
 
 class SMA(IndicatorBase):
-    def __init__(self, data: pd.DataFrame, window: int = 20, price_col: str = "Close", alias: Optional[str] = None):
+    def __init__(self, data: pd.DataFrame, window: int = 20, price_col: str = "Close", alias: str | None = None):
         super().__init__(data)
         self.window = window
         self.price_col = price_col

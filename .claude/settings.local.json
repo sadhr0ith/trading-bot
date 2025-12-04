@@ -18,7 +18,8 @@
       "Bash(python3:*)",
       "Bash(NOTIFICATION_EMAILS=\"test1@example.com,test2@example.com\" python3:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(git rm:*)"
     ],
     "deny": [],
     "ask": []

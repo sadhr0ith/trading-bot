@@ -1,5 +1,6 @@
 import pandas as pd
 
+
 class RSI:
     def __init__(self, data: pd.DataFrame, period: int = 14):
         """
@@ -11,7 +12,7 @@ class RSI:
         self.period = period
 
     def calculate(self) -> pd.Series:
-        delta = self.data['Close'].diff()
+        delta = self.data["Close"].diff()
         gain = delta.where(delta > 0, 0.0)
         loss = -delta.where(delta < 0, 0.0)
 

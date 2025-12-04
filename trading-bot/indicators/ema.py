@@ -1,12 +1,12 @@
 # indicators/ema.py
+
 import pandas as pd
-from typing import Optional
 
 from indicators.indicator_base import IndicatorBase
 
 
 class EMA(IndicatorBase):
-    def __init__(self, data: pd.DataFrame, span: int = 20, price_col: str = "Close", alias: Optional[str] = None):
+    def __init__(self, data: pd.DataFrame, span: int = 20, price_col: str = "Close", alias: str | None = None):
         super().__init__(data)
         self.span = span
         self.price_col = price_col

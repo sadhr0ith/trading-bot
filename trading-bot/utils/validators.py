@@ -1,19 +1,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, Iterable, List, Tuple
 
 import pandas as pd
 from pydantic import ValidationError as PydanticValidationError
 
-from models.config import ALLOWED_INDICATORS, StrategyConfig, parse_strategy_config
+from models.config import parse_strategy_config
 from utils.logger import setup_logger
+
 
 @dataclass
 class ValidationResult:
     is_valid: bool
-    errors: List[str] = field(default_factory=list)
-    warnings: List[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
     data: pd.DataFrame | None = None
 
 
@@ -25,7 +25,7 @@ class ConfigValidator:
     def __init__(self):
         self.logger = setup_logger(self.__class__.__name__)
 
-    def validate(self, config: Dict) -> ValidationResult:
+    def validate(self, config: dict) -> ValidationResult:
         if config is None:
             return ValidationResult(False, ["Config is None."])
 
@@ -48,8 +48,8 @@ class DataValidator:
         self.logger = setup_logger(self.__class__.__name__)
 
     def validate(self, data: pd.DataFrame) -> ValidationResult:
-        errors: List[str] = []
-        warnings: List[str] = []
+        errors: list[str] = []
+        warnings: list[str] = []
 
         if data is None or data.empty:
             errors.append("DataFrame is empty.")
@@ -65,12 +65,7 @@ class DataValidator:
         if missing_cols:
             errors.append(f"Missing required columns: {sorted(missing_cols)}")
             # Return immediately to prevent KeyError when accessing missing columns
-            return ValidationResult(
-                is_valid=False,
-                errors=errors,
-                warnings=warnings,
-                data=None
-            )
+            return ValidationResult(is_valid=False, errors=errors, warnings=warnings, data=None)
 
         if len(df) < self.min_rows:
             warnings.append(f"DataFrame has only {len(df)} rows; minimum recommended is {self.min_rows}.")
@@ -79,15 +74,15 @@ class DataValidator:
             warnings.append("Duplicate index entries detected; keeping first occurrence.")
             df = df[~df.index.duplicated(keep="first")]
 
-        if df[['Close']].isna().any().any():
+        if df[["Close"]].isna().any().any():
             warnings.append("NaN values detected in Close; dropping those rows.")
-            df = df.dropna(subset=['Close'])
+            df = df.dropna(subset=["Close"])
 
-        if 'Volume' in df.columns and (df['Volume'] <= 0).any():
+        if "Volume" in df.columns and (df["Volume"] <= 0).any():
             warnings.append("Non-positive volume rows detected; filtering them out.")
-            df = df[df['Volume'] > 0]
+            df = df[df["Volume"] > 0]
 
-        if (df['Close'] <= 0).any():
+        if (df["Close"] <= 0).any():
             errors.append("Non-positive Close prices detected; aborting.")
 
         is_valid = len(errors) == 0

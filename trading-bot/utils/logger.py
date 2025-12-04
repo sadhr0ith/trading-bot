@@ -5,14 +5,14 @@ import os
 
 class ColoredFormatter(logging.Formatter):
     COLOR_CODES = {
-        "BUY": "\033[92m",      # Green for BUY
-        "SELL": "\033[91m",     # Red for SELL
-        "HOLD": "\033[93m",     # Yellow for HOLD
-        "DEBUG": "\033[94m",    # Blue for debugging
-        "INFO": "\033[92m",     # Green for general info
+        "BUY": "\033[92m",  # Green for BUY
+        "SELL": "\033[91m",  # Red for SELL
+        "HOLD": "\033[93m",  # Yellow for HOLD
+        "DEBUG": "\033[94m",  # Blue for debugging
+        "INFO": "\033[92m",  # Green for general info
         "WARNING": "\033[93m",  # Yellow for warnings
-        "ERROR": "\033[91m",    # Red for errors
-        "RESET": "\033[0m"
+        "ERROR": "\033[91m",  # Red for errors
+        "RESET": "\033[0m",
     }
 
     def format(self, record):

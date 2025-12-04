@@ -4,7 +4,6 @@ from keras.callbacks import EarlyStopping
 from sklearn.metrics import mean_absolute_error
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.preprocessing import MinMaxScaler
-from tensorflow import keras
 
 from indicators.rsi import RSI
 from models.lstm_model import create_lstm_model
@@ -21,7 +20,7 @@ class DayTradingStrategy(StrategyBase):
     def _create_sequences(values: np.ndarray, targets: np.ndarray, seq_len: int):
         sequences, labels = [], []
         for i in range(len(values) - seq_len):
-            sequences.append(values[i:i + seq_len])
+            sequences.append(values[i : i + seq_len])
             labels.append(targets[i + seq_len])
         return np.array(sequences), np.array(labels)
 
@@ -42,13 +41,15 @@ class DayTradingStrategy(StrategyBase):
             {"units": 64, "learning_rate": 0.0005, "epochs": 26, "batch_size": 32, "patience": 5},
         ]
 
-    def _inference_only(self, model, scaler_X, scaler_y, feature_cols, feature_values, asset, strategy_name, recent_data):
-        latest_sequence = feature_values[-self.SEQ_LEN:]
+    def _inference_only(
+        self, model, scaler_X, scaler_y, feature_cols, feature_values, asset, strategy_name, recent_data
+    ):
+        latest_sequence = feature_values[-self.SEQ_LEN :]
         latest_scaled = scaler_X.transform(latest_sequence).reshape(1, self.SEQ_LEN, len(feature_cols))
         predicted_close = float(scaler_y.inverse_transform(model.predict(latest_scaled, verbose=0)).ravel()[0])
 
-        last_close = float(recent_data['Close'].iloc[-1])
-        last_rsi_value = float(recent_data['RSI'].iloc[-1])
+        last_close = float(recent_data["Close"].iloc[-1])
+        last_rsi_value = float(recent_data["RSI"].iloc[-1])
         msg = f"RSI: {last_rsi_value:.2f}, Predicted next Close: {predicted_close:.4f}, Last Close: {last_close:.4f}"
 
         if last_rsi_value < 30 and predicted_close > last_close:
@@ -62,7 +63,11 @@ class DayTradingStrategy(StrategyBase):
         trade_summary = self.order_executor.process_signal(asset, decision, last_close, self.risk_manager)
         if trade_summary.get("status") not in {"noop", "already_long"}:
             self.log_action(f"Paper trade summary: {trade_summary}", "info")
-        send_email(f"{decision} Signal for {asset} using {strategy_name}", f"{msg} -> {decision} signal | trade: {trade_summary}", self.config['notification_email'])
+        send_email(
+            f"{decision} Signal for {asset} using {strategy_name}",
+            f"{msg} -> {decision} signal | trade: {trade_summary}",
+            self.config["notification_email"],
+        )
         return decision
 
     def execute(self):
@@ -79,27 +84,27 @@ class DayTradingStrategy(StrategyBase):
         if self.config.get("use_indicators", True) and "rsi" in self.config.get("indicators", []):
             self.log_action("Calculating RSI indicator...", "info")
             rsi_indicator = RSI(recent_data)
-            recent_data['RSI'] = rsi_indicator.calculate()
+            recent_data["RSI"] = rsi_indicator.calculate()
         else:
-            recent_data['RSI'] = recent_data['Close'].pct_change().fillna(0)
+            recent_data["RSI"] = recent_data["Close"].pct_change().fillna(0)
 
         # Additional microstructure features
-        if 'Volume' not in recent_data.columns:
+        if "Volume" not in recent_data.columns:
             self.log_action("Volume column missing; filling Volume with zeros for day-trading features.", "warning")
-            recent_data['Volume'] = 0.0
-        returns = recent_data['Close'].pct_change()
-        recent_data['Volatility_10'] = returns.rolling(10).std()
+            recent_data["Volume"] = 0.0
+        returns = recent_data["Close"].pct_change()
+        recent_data["Volatility_10"] = returns.rolling(10).std()
         # ATR for volatility-adjusted signal
-        if all(col in recent_data.columns for col in ['High', 'Low', 'Close']):
-            high_low = recent_data['High'] - recent_data['Low']
-            high_close = (recent_data['High'] - recent_data['Close'].shift()).abs()
-            low_close = (recent_data['Low'] - recent_data['Close'].shift()).abs()
+        if all(col in recent_data.columns for col in ["High", "Low", "Close"]):
+            high_low = recent_data["High"] - recent_data["Low"]
+            high_close = (recent_data["High"] - recent_data["Close"].shift()).abs()
+            low_close = (recent_data["Low"] - recent_data["Close"].shift()).abs()
             tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
-            recent_data['ATR_14'] = tr.rolling(14).mean()
+            recent_data["ATR_14"] = tr.rolling(14).mean()
         else:
-            recent_data['ATR_14'] = 0.0
+            recent_data["ATR_14"] = 0.0
 
-        feature_cols = ['Close', 'RSI', 'Volume', 'Volatility_10', 'ATR_14']
+        feature_cols = ["Close", "RSI", "Volume", "Volatility_10", "ATR_14"]
         recent_data = recent_data.dropna(subset=feature_cols)
         if len(recent_data) <= self.SEQ_LEN:
             self.log_action("Not enough rows to build LSTM sequences.", "warning")
@@ -108,7 +113,7 @@ class DayTradingStrategy(StrategyBase):
         self._log_feature_stats(recent_data[feature_cols], stage="train/inference window")
 
         feature_values = recent_data[feature_cols].values
-        target_values = recent_data['Close'].values
+        target_values = recent_data["Close"].values
         X_seq, y_seq = self._create_sequences(feature_values, target_values, self.SEQ_LEN)
         latest_idx = self._latest_index(recent_data)
 
@@ -153,7 +158,9 @@ class DayTradingStrategy(StrategyBase):
 
                     scaler_X = MinMaxScaler()
                     scaler_y = MinMaxScaler()
-                    X_train_scaled = scaler_X.fit_transform(X_train_raw.reshape(-1, len(feature_cols))).reshape(X_train_raw.shape)
+                    X_train_scaled = scaler_X.fit_transform(X_train_raw.reshape(-1, len(feature_cols))).reshape(
+                        X_train_raw.shape
+                    )
                     X_val_scaled = scaler_X.transform(X_val_raw.reshape(-1, len(feature_cols))).reshape(X_val_raw.shape)
                     y_train_scaled = scaler_y.fit_transform(y_train_raw.reshape(-1, 1))
                     y_val_scaled = scaler_y.transform(y_val_raw.reshape(-1, 1))
@@ -169,7 +176,9 @@ class DayTradingStrategy(StrategyBase):
                         validation_data=(X_val_scaled, y_val_scaled),
                         epochs=cfg["epochs"],
                         batch_size=cfg["batch_size"],
-                        callbacks=[EarlyStopping(monitor='val_loss', patience=cfg["patience"], restore_best_weights=True)],
+                        callbacks=[
+                            EarlyStopping(monitor="val_loss", patience=cfg["patience"], restore_best_weights=True)
+                        ],
                         verbose=0,
                     )
                     preds_scaled = model.predict(X_val_scaled, verbose=0)
@@ -204,7 +213,7 @@ class DayTradingStrategy(StrategyBase):
             units=best_cfg["units"],
             learning_rate=best_cfg["learning_rate"],
         )
-        early_stopping = EarlyStopping(monitor='val_loss', patience=best_cfg["patience"], restore_best_weights=True)
+        early_stopping = EarlyStopping(monitor="val_loss", patience=best_cfg["patience"], restore_best_weights=True)
         model.fit(
             X_train_scaled,
             y_train_scaled,

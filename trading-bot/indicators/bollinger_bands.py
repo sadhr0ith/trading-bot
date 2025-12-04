@@ -13,17 +13,12 @@ class BollingerBands(IndicatorBase):
 
     def calculate(self) -> pd.DataFrame:
         """Calculate Bollinger Bands without mutating input data."""
-        rolling_mean = self.data['Close'].rolling(window=self.window, min_periods=self.window).mean()
-        rolling_std = self.data['Close'].rolling(window=self.window, min_periods=self.window).std(ddof=0)
+        rolling_mean = self.data["Close"].rolling(window=self.window, min_periods=self.window).mean()
+        rolling_std = self.data["Close"].rolling(window=self.window, min_periods=self.window).std(ddof=0)
 
         upper = rolling_mean + self.num_std * rolling_std
         lower = rolling_mean - self.num_std * rolling_std
         width = (upper - lower) / rolling_mean.replace(0, np.nan)
 
-        bands = pd.DataFrame({
-            'BB_Middle': rolling_mean,
-            'BB_Upper': upper,
-            'BB_Lower': lower,
-            'BB_Width': width
-        })
+        bands = pd.DataFrame({"BB_Middle": rolling_mean, "BB_Upper": upper, "BB_Lower": lower, "BB_Width": width})
         return bands

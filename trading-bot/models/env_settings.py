@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional, Type, TypeVar
+from typing import TypeVar
 
 from pydantic import BaseSettings, EmailStr, Field, ValidationError
 
@@ -31,13 +31,13 @@ class CacheSettings(BaseSettings):
 
 
 class LoggingSettings(BaseSettings):
-    level: Optional[str] = Field(None, env="TRADING_BOT_LOG_LEVEL")
+    level: str | None = Field(None, env="TRADING_BOT_LOG_LEVEL")
 
     class Config:
         extra = "ignore"
 
 
-def _load_settings(settings_cls: Type[T], logger=None) -> Optional[T]:
+def _load_settings(settings_cls: type[T], logger=None) -> T | None:
     try:
         return settings_cls()
     except ValidationError as exc:
@@ -46,17 +46,17 @@ def _load_settings(settings_cls: Type[T], logger=None) -> Optional[T]:
         return None
 
 
-def load_binance_settings(logger=None) -> Optional[BinanceSettings]:
+def load_binance_settings(logger=None) -> BinanceSettings | None:
     return _load_settings(BinanceSettings, logger)
 
 
-def load_email_settings(logger=None) -> Optional[EmailSettings]:
+def load_email_settings(logger=None) -> EmailSettings | None:
     return _load_settings(EmailSettings, logger)
 
 
-def load_cache_settings(logger=None) -> Optional[CacheSettings]:
+def load_cache_settings(logger=None) -> CacheSettings | None:
     return _load_settings(CacheSettings, logger)
 
 
-def load_logging_settings(logger=None) -> Optional[LoggingSettings]:
+def load_logging_settings(logger=None) -> LoggingSettings | None:
     return _load_settings(LoggingSettings, logger)

@@ -10,6 +10,7 @@ class TradingBotError(Exception):
 
     All custom exceptions in the trading bot should inherit from this class.
     """
+
     pass
 
 
@@ -21,6 +22,7 @@ class InsufficientDataError(TradingBotError):
         - Missing required historical data for indicators
         - Dataset too small for time series split
     """
+
     pass
 
 
@@ -33,6 +35,7 @@ class ModelPersistenceError(TradingBotError):
         - Corrupted model file
         - Version mismatch
     """
+
     pass
 
 
@@ -44,6 +47,7 @@ class RiskViolationError(TradingBotError):
         - Insufficient balance for trade
         - Risk limits breached
     """
+
     pass
 
 
@@ -56,6 +60,7 @@ class DataValidationError(TradingBotError):
         - Non-positive prices
         - Empty dataset
     """
+
     pass
 
 
@@ -68,6 +73,7 @@ class ConfigurationError(TradingBotError):
         - Missing required config fields
         - Invalid parameter values
     """
+
     pass
 
 
@@ -80,4 +86,5 @@ class DataFetchError(TradingBotError):
         - Invalid ticker symbol
         - API authentication failed
     """
+
     pass

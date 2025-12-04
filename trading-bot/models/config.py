@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import List, Optional, Set, Union
-
 from pydantic import BaseModel, EmailStr, root_validator, validator
 
 from utils.time_utils import parse_period_to_timedelta
@@ -25,8 +23,8 @@ class _DictLikeModel(BaseModel):
 
 
 class RiskConfig(_DictLikeModel):
-    stop_loss: Optional[float] = None
-    take_profit: Optional[float] = None
+    stop_loss: float | None = None
+    take_profit: float | None = None
     max_position_size: float = 0.1
     trading_fee: float = 0.001
 
@@ -46,13 +44,13 @@ class StrategyConfig(_DictLikeModel):
     ticker: str
     period: str
     interval: str
-    indicators: Set[str] = set()
+    indicators: set[str] = set()
     use_indicators: bool = True
-    log_level: Optional[Union[str, int]] = None
-    notification_email: Optional[Union[EmailStr, List[EmailStr]]] = None
-    seed: Optional[int] = None
+    log_level: str | int | None = None
+    notification_email: EmailStr | list[EmailStr] | None = None
+    seed: int | None = None
     risk_management: RiskConfig = RiskConfig()
-    min_rows: Optional[int] = None
+    min_rows: int | None = None
 
     @validator("strategy")
     def _validate_strategy(cls, value):
@@ -123,7 +121,9 @@ class StrategyConfig(_DictLikeModel):
             allowed = YAHOO_INTERVALS
 
         if interval not in allowed:
-            raise ValueError(f"Unsupported interval '{interval}' for source '{data_source}'. Allowed: {sorted(allowed)}")
+            raise ValueError(
+                f"Unsupported interval '{interval}' for source '{data_source}'. Allowed: {sorted(allowed)}"
+            )
 
         return values
 

@@ -6,9 +6,9 @@ from config_handler import get_sleep_duration, load_config
 from core.exceptions import InsufficientDataError, ModelPersistenceError, TradingBotError
 from data_fetcher import fetch_data_online
 from strategy_manager import select_strategy
+from utils.logger import setup_logger
 from utils.model_persistence import ModelPersistence
 from utils.strategy_helpers import _build_config_signature
-from utils.logger import setup_logger
 from utils.validators import ConfigValidator, DataValidator
 
 logger = setup_logger("TradingBot")
@@ -115,7 +115,9 @@ def run_trading_bot(strategy):
             continue
 
         sleep_duration = get_sleep_duration(strategy)
-        logger.info(f"Sleeping for {timedelta(seconds=sleep_duration)} before fetching data again for {asset} using {strategy}.")
+        logger.info(
+            f"Sleeping for {timedelta(seconds=sleep_duration)} before fetching data again for {asset} using {strategy}."
+        )
         time.sleep(sleep_duration)
 
 
@@ -124,11 +126,11 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Run the trading bot with the specified strategy.")
     parser.add_argument(
-        '--strategy',
+        "--strategy",
         type=str,
         required=True,
         choices=sorted(ALLOWED_STRATEGIES),
-        help="Strategy to run: 'day_trading', 'short_term', 'mid_term', 'long_term'"
+        help="Strategy to run: 'day_trading', 'short_term', 'mid_term', 'long_term'",
     )
     args = parser.parse_args()
 

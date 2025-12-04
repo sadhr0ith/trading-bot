@@ -1,6 +1,5 @@
 import os
 import random
-from typing import Optional
 
 import numpy as np
 
@@ -10,7 +9,7 @@ except Exception:  # noqa: BLE001
     tf = None
 
 
-def set_global_seeds(seed: Optional[int] = None) -> int:
+def set_global_seeds(seed: int | None = None) -> int:
     """
     Set seeds for reproducibility across random, numpy and tensorflow (if available).
     Returns the seed used.

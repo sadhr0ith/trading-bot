@@ -2,10 +2,11 @@ import importlib
 
 from pydantic import ValidationError
 
-from models.config import StrategyConfig, parse_strategy_config
+from models.config import parse_strategy_config
 from utils.logger import setup_logger
 
 logger = setup_logger("TradingBot")
+
 
 def load_config(strategy):
     """
@@ -30,6 +31,7 @@ def load_config(strategy):
             logger.error(f"Config validation error at {loc}: {err.get('msg')}")
         logger.error("Invalid strategy configuration. Aborting load.")
         return None
+
 
 def get_sleep_duration(strategy):
     """

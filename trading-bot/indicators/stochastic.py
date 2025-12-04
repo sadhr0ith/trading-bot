@@ -12,17 +12,14 @@ class StochasticOscillator(IndicatorBase):
 
     def calculate(self) -> pd.DataFrame:
         """Calculate Stochastic Oscillator without mutating input data."""
-        lowest_low = self.data['Low'].rolling(window=self.k_period, min_periods=self.k_period).min()
-        highest_high = self.data['High'].rolling(window=self.k_period, min_periods=self.k_period).max()
+        lowest_low = self.data["Low"].rolling(window=self.k_period, min_periods=self.k_period).min()
+        highest_high = self.data["High"].rolling(window=self.k_period, min_periods=self.k_period).max()
 
         range_ = highest_high - lowest_low
         range_ = range_.replace(0, np.nan)
 
-        percent_k = 100 * (self.data['Close'] - lowest_low) / range_
+        percent_k = 100 * (self.data["Close"] - lowest_low) / range_
         percent_d = percent_k.rolling(window=self.d_period, min_periods=self.d_period).mean()
 
-        result = pd.DataFrame({
-            'Stochastic_K': percent_k,
-            'Stochastic_D': percent_d
-        })
+        result = pd.DataFrame({"Stochastic_K": percent_k, "Stochastic_D": percent_d})
         return result

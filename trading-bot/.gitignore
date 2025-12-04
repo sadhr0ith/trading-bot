@@ -8,3 +8,13 @@ __pycache__/
 nohup.out
 log.txt
 output.log
+
+# Testing
+.coverage
+.pytest_cache/
+htmlcov/
+
+# Build
+build/
+dist/
+*.egg-info/

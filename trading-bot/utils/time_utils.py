@@ -44,12 +44,12 @@ def parse_period_to_timedelta(period: str) -> timedelta:
 
     # Map units to timedelta
     unit_map = {
-        'm': timedelta(minutes=value),
-        'M': timedelta(days=value * 30),  # Approximate month as 30 days
-        'w': timedelta(weeks=value),
-        'd': timedelta(days=value),
-        'h': timedelta(hours=value),
-        'y': timedelta(days=value * 365),  # Approximate year as 365 days
+        "m": timedelta(minutes=value),
+        "M": timedelta(days=value * 30),  # Approximate month as 30 days
+        "w": timedelta(weeks=value),
+        "d": timedelta(days=value),
+        "h": timedelta(hours=value),
+        "y": timedelta(days=value * 365),  # Approximate year as 365 days
     }
 
     if unit not in unit_map:

@@ -15,14 +15,10 @@ def test_strategy_specific_state_files():
 
         # Create two executors with different strategy names
         executor1 = PaperTradingExecutor(
-            state_path=tmpdir_path / "state1.json",
-            strategy_name="short_term",
-            initial_balance=10_000.0
+            state_path=tmpdir_path / "state1.json", strategy_name="short_term", initial_balance=10_000.0
         )
         executor2 = PaperTradingExecutor(
-            state_path=tmpdir_path / "state2.json",
-            strategy_name="long_term",
-            initial_balance=20_000.0
+            state_path=tmpdir_path / "state2.json", strategy_name="long_term", initial_balance=20_000.0
         )
 
         # Verify initial balances are different (isolated states)
@@ -53,6 +49,7 @@ def test_default_state_path_with_strategy_name():
         try:
             # Change to temp directory so state files are created there
             import os
+
             os.chdir(tmpdir)
 
             # Create executor with strategy name but no explicit state_path
@@ -70,7 +67,7 @@ def test_default_state_path_with_strategy_name():
             assert expected_path.exists()
 
             # Verify strategy_name is in the saved state
-            with open(expected_path, "r", encoding="utf-8") as f:
+            with open(expected_path, encoding="utf-8") as f:
                 saved_state = json.load(f)
             assert saved_state["strategy_name"] == "mid_term"
 
@@ -87,6 +84,7 @@ def test_default_state_path_without_strategy_name():
         original_cwd = Path.cwd()
         try:
             import os
+
             os.chdir(tmpdir)
 
             # Create executor without strategy name or state_path
@@ -105,7 +103,7 @@ def test_default_state_path_without_strategy_name():
             executor.process_signal("BTCUSDT", "BUY", 50_000.0, rm)
 
             # Verify file exists but has no strategy_name
-            with open(expected_path, "r", encoding="utf-8") as f:
+            with open(expected_path, encoding="utf-8") as f:
                 saved_state = json.load(f)
             assert "strategy_name" not in saved_state
 
@@ -118,26 +116,21 @@ def test_default_state_path_without_strategy_name():
 
 def test_strategy_name_mismatch_warning(caplog):
     """Test 7.4: Loading state with different strategy_name logs warning."""
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         state_path = f.name
 
         # Create initial state with strategy_name="short_term"
-        initial_state = {
-            "balance": 100_000.0,
-            "positions": {},
-            "history": [],
-            "strategy_name": "short_term"
-        }
+        initial_state = {"balance": 100_000.0, "positions": {}, "history": [], "strategy_name": "short_term"}
         json.dump(initial_state, f)
         f.flush()
 
     try:
         # Load with different strategy_name
         import logging
+
         with caplog.at_level(logging.WARNING):
             executor = PaperTradingExecutor(
-                state_path=state_path,
-                strategy_name="long_term"  # Different from saved "short_term"
+                state_path=state_path, strategy_name="long_term"  # Different from saved "short_term"
             )
 
         # Note: Warning might not appear in caplog due to custom logger,
@@ -159,14 +152,10 @@ def test_concurrent_strategies_isolated_states():
         config2 = {"strategy": "swing_trading"}
 
         executor1 = PaperTradingExecutor(
-            state_path=tmpdir_path / "day_trading.json",
-            strategy_name=config1["strategy"],
-            initial_balance=50_000.0
+            state_path=tmpdir_path / "day_trading.json", strategy_name=config1["strategy"], initial_balance=50_000.0
         )
         executor2 = PaperTradingExecutor(
-            state_path=tmpdir_path / "swing_trading.json",
-            strategy_name=config2["strategy"],
-            initial_balance=50_000.0
+            state_path=tmpdir_path / "swing_trading.json", strategy_name=config2["strategy"], initial_balance=50_000.0
         )
 
         rm1 = RiskManager({"max_position_size": 0.2, "trading_fee": 0.001, "stop_loss": 0.02, "take_profit": 0.03})
@@ -174,7 +163,7 @@ def test_concurrent_strategies_isolated_states():
 
         # Execute different trades on each
         executor1.process_signal("BTCUSDT", "BUY", 50_000.0, rm1)  # Day trading buys BTC
-        executor2.process_signal("ETHUSDT", "BUY", 3_000.0, rm2)   # Swing trading buys ETH
+        executor2.process_signal("ETHUSDT", "BUY", 3_000.0, rm2)  # Swing trading buys ETH
 
         # Verify complete isolation
         assert "BTCUSDT" in executor1.state["positions"]
@@ -206,12 +195,12 @@ def test_concurrent_strategies_isolated_states():
         assert (tmpdir_path / "swing_trading.json").exists()
 
         # Verify state file contents
-        with open(tmpdir_path / "day_trading.json", "r", encoding="utf-8") as f:
+        with open(tmpdir_path / "day_trading.json", encoding="utf-8") as f:
             day_state = json.load(f)
         assert day_state["strategy_name"] == "day_trading"
         assert "BTCUSDT" in day_state["positions"]
 
-        with open(tmpdir_path / "swing_trading.json", "r", encoding="utf-8") as f:
+        with open(tmpdir_path / "swing_trading.json", encoding="utf-8") as f:
             swing_state = json.load(f)
         assert swing_state["strategy_name"] == "swing_trading"
         assert "ETHUSDT" in swing_state["positions"]

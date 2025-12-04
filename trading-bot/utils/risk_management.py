@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Union
+
+from pydantic import ValidationError as PydanticValidationError
 
 from models.config import RiskConfig
-from pydantic import ValidationError as PydanticValidationError
 from utils.logger import setup_logger
 
 
@@ -13,8 +13,8 @@ class Position:
     symbol: str
     entry_price: float
     size: float
-    stop_loss: Optional[float]
-    take_profit: Optional[float]
+    stop_loss: float | None
+    take_profit: float | None
 
 
 class RiskManager:
@@ -36,7 +36,12 @@ class RiskManager:
         }
     """
 
-    def __init__(self, risk_config: Optional[Union[RiskConfig, dict]] = None, default_max_position: float = 0.1, trading_fee: float = 0.001):
+    def __init__(
+        self,
+        risk_config: RiskConfig | dict | None = None,
+        default_max_position: float = 0.1,
+        trading_fee: float = 0.001,
+    ):
         self.logger = setup_logger(self.__class__.__name__)
 
         if risk_config is None:

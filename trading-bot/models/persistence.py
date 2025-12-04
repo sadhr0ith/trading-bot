@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -11,13 +10,13 @@ class PersistenceMetadata(BaseModel):
     version: str
     strategy: str
     artifact_path: str
-    feature_columns: List[str] = Field(default_factory=list)
-    trained_until: Optional[str] = None
-    mae_cv: Optional[float] = None
-    config_signature: Optional[str] = None
-    model_signature: Optional[str] = None
-    scoring: Optional[str] = None
-    n_splits: Optional[int] = None
+    feature_columns: list[str] = Field(default_factory=list)
+    trained_until: str | None = None
+    mae_cv: float | None = None
+    config_signature: str | None = None
+    model_signature: str | None = None
+    scoring: str | None = None
+    n_splits: int | None = None
 
     class Config:
         extra = "allow"

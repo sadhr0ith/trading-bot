@@ -1,25 +1,26 @@
 # strategies/mid_term_strategy.py
-from typing import List
 
-from sklearn.experimental import enable_halving_search_cv  # noqa: F401
 import numpy as np
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.experimental import enable_halving_search_cv  # noqa: F401
 from sklearn.linear_model import ElasticNet
 from sklearn.model_selection import HalvingRandomSearchCV, TimeSeriesSplit, cross_val_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.utils.validation import check_is_fitted
 
-from .strategy_base import StrategyBase
 from indicators.bollinger_bands import BollingerBands
 from indicators.macd import MACD
 from utils.model_persistence import ModelPersistence
 from utils.strategy_helpers import train_or_load_pipeline
 
+from .strategy_base import StrategyBase
+
 
 class MidTermStrategy(StrategyBase):
     """Mid-term (20-day) RandomForest on lag/return/vol/drawdown features with indicator add-ons and correlation pruning."""
+
     def execute(self):
         if self.data is None or self.data.empty:
             self.log_action("Input data frame is empty; skipping execution.", "warning")
@@ -32,36 +33,52 @@ class MidTermStrategy(StrategyBase):
         if self.config.get("use_indicators", True) and "macd" in self.config.get("indicators", []):
             self.log_action("Calculating MACD indicator...", "info")
             macd_indicator = MACD(data)
-            data = data.drop(columns=['MACD', 'Signal', 'MACD_Histogram'], errors="ignore")
+            data = data.drop(columns=["MACD", "Signal", "MACD_Histogram"], errors="ignore")
             data = data.join(macd_indicator.calculate())
 
         if self.config.get("use_indicators", True) and "bollinger_bands" in self.config.get("indicators", []):
             self.log_action("Calculating Bollinger Bands indicator...", "info")
             bb_indicator = BollingerBands(data)
-            data = data.drop(columns=['BB_Middle', 'BB_Upper', 'BB_Lower', 'BB_Width'], errors="ignore")
+            data = data.drop(columns=["BB_Middle", "BB_Upper", "BB_Lower", "BB_Width"], errors="ignore")
             data = data.join(bb_indicator.calculate())
 
         for lag in [5, 10, 20, 60, 120]:
-            data[f"Close_lag_{lag}"] = data['Close'].shift(lag)
-            data[f"Return_lag_{lag}"] = data['Close'].pct_change(lag)
-            data[f"Volatility_{lag}"] = data['Close'].pct_change().rolling(lag).std()
-            rolling_max = data['Close'].rolling(lag).max()
-            data[f"Drawdown_{lag}"] = (data['Close'] / rolling_max) - 1
+            data[f"Close_lag_{lag}"] = data["Close"].shift(lag)
+            data[f"Return_lag_{lag}"] = data["Close"].pct_change(lag)
+            data[f"Volatility_{lag}"] = data["Close"].pct_change().rolling(lag).std()
+            rolling_max = data["Close"].rolling(lag).max()
+            data[f"Drawdown_{lag}"] = (data["Close"] / rolling_max) - 1
 
-        data['target'] = data['Close'].pct_change(20).shift(-20)
+        data["target"] = data["Close"].pct_change(20).shift(-20)
 
-        feature_columns: List[str] = [
-            'Close_lag_5', 'Close_lag_10', 'Close_lag_20', 'Close_lag_60', 'Close_lag_120',
-            'Return_lag_5', 'Return_lag_10', 'Return_lag_20', 'Return_lag_60', 'Return_lag_120',
-            'Volatility_5', 'Volatility_10', 'Volatility_20', 'Volatility_60', 'Volatility_120',
-            'Drawdown_5', 'Drawdown_10', 'Drawdown_20', 'Drawdown_60', 'Drawdown_120',
+        feature_columns: list[str] = [
+            "Close_lag_5",
+            "Close_lag_10",
+            "Close_lag_20",
+            "Close_lag_60",
+            "Close_lag_120",
+            "Return_lag_5",
+            "Return_lag_10",
+            "Return_lag_20",
+            "Return_lag_60",
+            "Return_lag_120",
+            "Volatility_5",
+            "Volatility_10",
+            "Volatility_20",
+            "Volatility_60",
+            "Volatility_120",
+            "Drawdown_5",
+            "Drawdown_10",
+            "Drawdown_20",
+            "Drawdown_60",
+            "Drawdown_120",
         ]
-        for col in ['MACD', 'MACD_Histogram', 'BB_Width', 'BB_Middle']:
+        for col in ["MACD", "MACD_Histogram", "BB_Width", "BB_Middle"]:
             if col in data.columns:
                 feature_columns.append(col)
 
         features = data[feature_columns]
-        target = data['target']
+        target = data["target"]
 
         inference_row = features.tail(1)
         if inference_row.isna().any().any():
@@ -141,12 +158,14 @@ class MidTermStrategy(StrategyBase):
 
         elasticnet_baseline_mae = None
         try:
-            enet_pipeline = build_model_pipeline(ElasticNet(
-                alpha=0.01,
-                l1_ratio=0.5,
-                max_iter=5000,
-                random_state=self.seed,
-            ))
+            enet_pipeline = build_model_pipeline(
+                ElasticNet(
+                    alpha=0.01,
+                    l1_ratio=0.5,
+                    max_iter=5000,
+                    random_state=self.seed,
+                )
+            )
             baseline_tscv = TimeSeriesSplit(n_splits=min(5, max(2, len(X) // 40)))
             baseline_scores = cross_val_score(
                 enet_pipeline,
@@ -196,7 +215,7 @@ class MidTermStrategy(StrategyBase):
             return
         predicted_return = float(pipeline.predict(inference_row)[0])
         self._log_feature_importance(pipeline, feature_columns)
-        last_close = data['Close'].iloc[-1]
+        last_close = data["Close"].iloc[-1]
         msg = f"Predicted 20-day return: {predicted_return:.4f}, last close: {last_close:.2f}"
 
         if predicted_return > 0.02:
@@ -210,7 +229,7 @@ class MidTermStrategy(StrategyBase):
             reason = "expected return within threshold"
 
         self.log_action(f"{msg} -> {decision} ({reason})", "info" if decision != "HOLD" else "warning")
-        trade_summary = self.order_executor.process_signal(asset, decision, data['Close'].iloc[-1], self.risk_manager)
+        trade_summary = self.order_executor.process_signal(asset, decision, data["Close"].iloc[-1], self.risk_manager)
         if trade_summary.get("status") not in {"noop", "already_long"}:
             self.log_action(f"Paper trade summary: {trade_summary}", "info")
 

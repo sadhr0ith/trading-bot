@@ -1,4 +1,3 @@
-import pandas as pd
 import tempfile
 from pathlib import Path
 
@@ -8,7 +7,7 @@ from utils.risk_management import RiskManager
 
 def test_risk_and_executor_integration_buy_sell_hold():
     # Use unique state file for isolation
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         state_path = f.name
 
     # Fix: use correct config keys (stop_loss, not stop_loss_pct) and reasonable max_position_size
@@ -31,7 +30,7 @@ def test_risk_and_executor_integration_buy_sell_hold():
 
 def test_buy_cash_accounting():
     """Test 1.4: BUY 1 BTC @ 50k with fee 0.001 - verify balance accounting"""
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         state_path = f.name
 
     # To buy exactly 1 BTC @ 50k, we need max_position_size to calculate to 1.0
@@ -58,7 +57,7 @@ def test_buy_cash_accounting():
 
 def test_sell_cash_accounting():
     """Test 1.5: SELL 1 BTC @ 55k with fee 0.001 - verify balance accounting"""
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         state_path = f.name
 
     rm = RiskManager({"max_position_size": 0.5, "trading_fee": 0.001, "stop_loss": 0.03, "take_profit": 0.05})
@@ -88,7 +87,7 @@ def test_sell_cash_accounting():
 
 def test_full_cycle_buy_sell_integration():
     """Test 1.6: Full cycle BUY@50k→SELL@55k - integration test"""
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         state_path = f.name
 
     rm = RiskManager({"max_position_size": 0.5, "trading_fee": 0.001, "stop_loss": 0.03, "take_profit": 0.05})
@@ -127,7 +126,7 @@ def test_full_cycle_buy_sell_integration():
 
 def test_insufficient_balance():
     """Test 1.7: BUY with insufficient balance - should fail gracefully"""
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
         state_path = f.name
 
     rm = RiskManager({"max_position_size": 1.0, "trading_fee": 0.001, "stop_loss": 0.03, "take_profit": 0.05})
@@ -146,13 +145,15 @@ def test_insufficient_balance():
 
 def test_risk_manager_rejects_unknown_keys_gracefully():
     """RiskManager should ignore/replace invalid keys via Pydantic validation."""
-    rm = RiskManager({
-        "stop_loss": 0.03,
-        "take_profit": 0.05,
-        "max_position_size": 0.1,
-        "trading_fee": 0.001,
-        "unknown_key": 123,
-    })
+    rm = RiskManager(
+        {
+            "stop_loss": 0.03,
+            "take_profit": 0.05,
+            "max_position_size": 0.1,
+            "trading_fee": 0.001,
+            "unknown_key": 123,
+        }
+    )
 
     assert rm.stop_loss == 0.03
     assert rm.take_profit == 0.05

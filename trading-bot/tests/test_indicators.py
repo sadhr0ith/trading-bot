@@ -6,10 +6,10 @@ import pandas as pd
 sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
 
 from indicators.bollinger_bands import BollingerBands
+from indicators.ema import EMA
 from indicators.macd import MACD
 from indicators.rsi import RSI
 from indicators.sma import SMA
-from indicators.ema import EMA
 from indicators.stochastic import StochasticOscillator
 
 

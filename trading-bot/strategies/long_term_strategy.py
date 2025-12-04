@@ -1,4 +1,3 @@
-from typing import List
 
 import numpy as np
 from sklearn.compose import ColumnTransformer
@@ -15,11 +14,13 @@ from indicators.sma import SMA
 from utils.email_notifications import send_email
 from utils.model_persistence import ModelPersistence
 from utils.strategy_helpers import train_or_load_pipeline
+
 from .strategy_base import StrategyBase
 
 
 class LongTermStrategy(StrategyBase):
     """Long-term (50-day) RandomForest using long lags, return/vol/drawdown features, indicators, and correlation pruning."""
+
     def execute(self):
         asset = self.config["ticker"]
         strategy_name = self.config["strategy"]
@@ -42,22 +43,22 @@ class LongTermStrategy(StrategyBase):
         if self.config.get("use_indicators", True) and "macd" in self.config["indicators"]:
             self.log_action("Calculating MACD indicator...", "info")
             macd_indicator = MACD(self.data)
-            self.data = self.data.drop(columns=['MACD', 'Signal', 'MACD_Histogram'], errors="ignore")
+            self.data = self.data.drop(columns=["MACD", "Signal", "MACD_Histogram"], errors="ignore")
             self.data = self.data.join(macd_indicator.calculate())
 
         # Lagi cen dla long-term (temporalne cechy)
         for lag in [20, 60, 120, 250]:
-            self.data[f"Close_lag_{lag}"] = self.data['Close'].shift(lag)
-            self.data[f"Return_lag_{lag}"] = self.data['Close'].pct_change(lag)
-            self.data[f"Volatility_{lag}"] = self.data['Close'].pct_change().rolling(lag).std()
-            rolling_max = self.data['Close'].rolling(lag).max()
-            self.data[f"Drawdown_{lag}"] = (self.data['Close'] / rolling_max) - 1
+            self.data[f"Close_lag_{lag}"] = self.data["Close"].shift(lag)
+            self.data[f"Return_lag_{lag}"] = self.data["Close"].pct_change(lag)
+            self.data[f"Volatility_{lag}"] = self.data["Close"].pct_change().rolling(lag).std()
+            rolling_max = self.data["Close"].rolling(lag).max()
+            self.data[f"Drawdown_{lag}"] = (self.data["Close"] / rolling_max) - 1
 
         # Target = forward 50-day return (przewidujemy przyszłość!)
-        self.data['target'] = self.data['Close'].pct_change(50).shift(-50)
+        self.data["target"] = self.data["Close"].pct_change(50).shift(-50)
 
         # Feature columns (BEZ bieżącego Close - używamy tylko lagów i wskaźników)
-        feature_columns: List[str] = []
+        feature_columns: list[str] = []
         # Dodaj lagi
         for lag in [20, 60, 120, 250]:
             feature_columns.append(f"Close_lag_{lag}")
@@ -65,18 +66,18 @@ class LongTermStrategy(StrategyBase):
             feature_columns.append(f"Volatility_{lag}")
             feature_columns.append(f"Drawdown_{lag}")
         # Dodaj wskaźniki
-        for col in ['SMA', 'EMA', 'MACD']:
+        for col in ["SMA", "EMA", "MACD"]:
             if col in self.data.columns:
                 feature_columns.append(col)
 
         # Dropna dla features I target
-        combined = self.data[feature_columns + ['target']].dropna()
+        combined = self.data[feature_columns + ["target"]].dropna()
         if combined.empty or len(combined) < 50:
             self.log_action("Not enough data after feature engineering; skipping execution.", "warning")
             return
 
         features = combined[feature_columns]
-        y_aligned = combined['target']
+        y_aligned = combined["target"]
 
         # Remove highly correlated / duplicate features to reduce redundancy
         features, dropped_cols = self._deduplicate_features(features)
@@ -110,12 +111,15 @@ class LongTermStrategy(StrategyBase):
         pipeline_factory = lambda: Pipeline(
             steps=[
                 ("preprocess", ColumnTransformer([("num", StandardScaler(), feature_columns)], remainder="drop")),
-                ("model", RandomForestRegressor(
-                    n_estimators=500,
-                    max_depth=12,
-                    random_state=self.seed,
-                    n_jobs=-1,
-                )),
+                (
+                    "model",
+                    RandomForestRegressor(
+                        n_estimators=500,
+                        max_depth=12,
+                        random_state=self.seed,
+                        n_jobs=-1,
+                    ),
+                ),
             ]
         )
 
@@ -157,7 +161,7 @@ class LongTermStrategy(StrategyBase):
         predicted_return = float(pipeline.predict(latest_features)[0])
         self._log_feature_importance(pipeline, feature_columns)
 
-        last_close = self.data['Close'].iloc[-1]
+        last_close = self.data["Close"].iloc[-1]
         msg = f"Predicted 50-day return: {predicted_return:.4f} ({predicted_return*100:.2f}%), Last Close: {last_close:.2f}"
 
         # Threshold return dla HOLD (0.5% = mało pewna predykcja)
@@ -165,7 +169,10 @@ class LongTermStrategy(StrategyBase):
 
         if abs(predicted_return) < hold_threshold:
             decision = "HOLD"
-            self.log_action(f"{msg} -> {decision} signal (predicted return too small: {abs(predicted_return):.4f} < {hold_threshold})", "warning")
+            self.log_action(
+                f"{msg} -> {decision} signal (predicted return too small: {abs(predicted_return):.4f} < {hold_threshold})",
+                "warning",
+            )
         elif predicted_return > hold_threshold:
             decision = "BUY"
             self.log_action(f"{msg} -> {decision} signal (positive return expected)", "info")
@@ -173,10 +180,16 @@ class LongTermStrategy(StrategyBase):
             decision = "SELL"
             self.log_action(f"{msg} -> {decision} signal (negative return expected)", "info")
 
-        trade_summary = self.order_executor.process_signal(asset, decision, self.data['Close'].iloc[-1], self.risk_manager)
+        trade_summary = self.order_executor.process_signal(
+            asset, decision, self.data["Close"].iloc[-1], self.risk_manager
+        )
         if trade_summary.get("status") not in {"noop", "already_long"}:
             self.log_action(f"Paper trade summary: {trade_summary}", "info")
-        send_email(f"{decision} Signal for {asset} using {strategy_name}", f"{msg} -> {decision} signal | trade: {trade_summary}", self.config['notification_email'])
+        send_email(
+            f"{decision} Signal for {asset} using {strategy_name}",
+            f"{msg} -> {decision} signal | trade: {trade_summary}",
+            self.config["notification_email"],
+        )
 
     def _deduplicate_features(self, X, threshold: float = 0.999):
         """Drop features that are almost perfectly correlated to reduce redundancy."""

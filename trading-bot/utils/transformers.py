@@ -2,7 +2,7 @@
 Feature Engineering Transformers for Trading Bot.
 All transformers follow scikit-learn API (BaseEstimator + TransformerMixin).
 """
-from typing import Dict, List, Optional
+
 
 import numpy as np
 import pandas as pd
@@ -12,13 +12,13 @@ from sklearn.base import BaseEstimator, TransformerMixin
 class LagFeatureTransformer(BaseEstimator, TransformerMixin):
     """Creates lagged features from specified columns."""
 
-    def __init__(self, columns: Optional[List[str]] = None, lags: Optional[List[int]] = None):
+    def __init__(self, columns: list[str] | None = None, lags: list[int] | None = None):
         """
         Args:
             columns: List of column names to create lags for. If None, defaults to ['Close'].
             lags: List of lag periods. If None, defaults to [1, 3, 5, 10].
         """
-        self.columns = columns or ['Close']
+        self.columns = columns or ["Close"]
         self.lags = lags or [1, 3, 5, 10]
 
     def fit(self, X, y=None):
@@ -51,9 +51,9 @@ class RollingStatsTransformer(BaseEstimator, TransformerMixin):
 
     def __init__(
         self,
-        price_col: str = 'Close',
-        volume_col: Optional[str] = 'Volume',
-        windows: Optional[List[int]] = None,
+        price_col: str = "Close",
+        volume_col: str | None = "Volume",
+        windows: list[int] | None = None,
     ):
         """
         Args:
@@ -103,7 +103,7 @@ class RollingStatsTransformer(BaseEstimator, TransformerMixin):
 class ReturnFeatureTransformer(BaseEstimator, TransformerMixin):
     """Creates return features (pct_change over different periods)."""
 
-    def __init__(self, price_col: str = 'Close', periods: Optional[List[int]] = None):
+    def __init__(self, price_col: str = "Close", periods: list[int] | None = None):
         """
         Args:
             price_col: Column name for price data.
@@ -174,9 +174,9 @@ class IndicatorLagTransformer(BaseEstimator, TransformerMixin):
 
     def __init__(
         self,
-        indicator_columns: Optional[List[str]] = None,
-        lags: Optional[List[int]] = None,
-        column_mapping: Optional[Dict[str, str]] = None,
+        indicator_columns: list[str] | None = None,
+        lags: list[int] | None = None,
+        column_mapping: dict[str, str] | None = None,
     ):
         """
         Args:
@@ -186,7 +186,7 @@ class IndicatorLagTransformer(BaseEstimator, TransformerMixin):
             column_mapping: Optional mapping to normalize input column names
                 to canonical names before lagging.
         """
-        self.indicator_columns = indicator_columns or ['MACD', 'Signal', 'RSI']
+        self.indicator_columns = indicator_columns or ["MACD", "Signal", "RSI"]
         self.lags = lags or [1]
         self.column_mapping = column_mapping or {}
 
@@ -221,7 +221,7 @@ class IndicatorLagTransformer(BaseEstimator, TransformerMixin):
 class FeatureSelector(BaseEstimator, TransformerMixin):
     """Selects specific columns and handles missing values."""
 
-    def __init__(self, feature_columns: List[str], handle_missing: str = 'drop'):
+    def __init__(self, feature_columns: list[str], handle_missing: str = "drop"):
         """
         Args:
             feature_columns: List of feature column names to select.
@@ -240,7 +240,7 @@ class FeatureSelector(BaseEstimator, TransformerMixin):
         available_features = [col for col in self.feature_columns if col in X.columns]
         X_selected = X[available_features].copy()
 
-        if self.handle_missing == 'fill':
+        if self.handle_missing == "fill":
             X_selected = X_selected.fillna(0)
         # 'drop' is handled later in the pipeline or by the caller
 

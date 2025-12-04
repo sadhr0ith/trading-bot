@@ -1,19 +1,22 @@
 import pandas as pd
 
-from strategies.short_term_strategy import ShortTermStrategy
-from strategies.mid_term_strategy import MidTermStrategy
 from strategies.long_term_strategy import LongTermStrategy
+from strategies.mid_term_strategy import MidTermStrategy
+from strategies.short_term_strategy import ShortTermStrategy
 
 
 def _make_dummy_data(rows=120):
     idx = pd.date_range("2024-01-01", periods=rows, freq="D")
-    data = pd.DataFrame({
-        "Open": pd.Series(range(rows), index=idx) + 100,
-        "High": pd.Series(range(rows), index=idx) + 101,
-        "Low": pd.Series(range(rows), index=idx) + 99,
-        "Close": pd.Series(range(rows), index=idx) + 100,
-        "Volume": pd.Series(range(rows), index=idx) * 10 + 1000,
-    }, index=idx)
+    data = pd.DataFrame(
+        {
+            "Open": pd.Series(range(rows), index=idx) + 100,
+            "High": pd.Series(range(rows), index=idx) + 101,
+            "Low": pd.Series(range(rows), index=idx) + 99,
+            "Close": pd.Series(range(rows), index=idx) + 100,
+            "Volume": pd.Series(range(rows), index=idx) * 10 + 1000,
+        },
+        index=idx,
+    )
     return data
 
 

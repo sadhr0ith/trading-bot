@@ -14,7 +14,11 @@ class StrategyBase(ABC):
         self.logger = setup_logger(self.__class__.__name__, config.get("log_level") if config else None)
         risk_cfg = None
         if config:
-            risk_cfg = getattr(config, "risk_management", None) if hasattr(config, "risk_management") else config.get("risk_management")
+            risk_cfg = (
+                getattr(config, "risk_management", None)
+                if hasattr(config, "risk_management")
+                else config.get("risk_management")
+            )
         self.risk_manager = RiskManager(risk_cfg)
 
         # Use strategy-specific state file to prevent position leakage between strategies

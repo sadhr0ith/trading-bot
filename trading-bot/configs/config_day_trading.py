@@ -17,9 +17,9 @@ CONFIG = {
     "notification_email": NOTIFICATION_EMAILS,
     "seed": 42,
     "risk_management": {
-        "stop_loss": 0.01,   # 1% stop loss
+        "stop_loss": 0.01,  # 1% stop loss
         "take_profit": 0.02,  # 2% take profit
         "max_position_size": 0.1,
-        "trading_fee": 0.001
-    }
+        "trading_fee": 0.001,
+    },
 }

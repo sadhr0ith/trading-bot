@@ -1,7 +1,7 @@
 import smtplib
+from collections.abc import Iterable
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Iterable, List, Union
 
 from models.env_settings import load_email_settings
 from utils.logger import setup_logger
@@ -9,7 +9,7 @@ from utils.logger import setup_logger
 logger = setup_logger("Email Notification")
 
 
-def _coerce_recipients(recipients: Union[str, Iterable[str]]) -> List[str]:
+def _coerce_recipients(recipients: str | Iterable[str]) -> list[str]:
     if isinstance(recipients, str):
         recipients = [recipients]
     elif recipients is None:
@@ -19,7 +19,7 @@ def _coerce_recipients(recipients: Union[str, Iterable[str]]) -> List[str]:
     return [r for r in recipients if r]
 
 
-def send_email(subject: str, body: str, to_email: Union[str, Iterable[str]]) -> bool:
+def send_email(subject: str, body: str, to_email: str | Iterable[str]) -> bool:
     """
     Send an email notification with the specified subject and body.
     Returns True on success, False otherwise.

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any, Callable, Dict, Iterable, Optional, Tuple
+from collections.abc import Callable, Iterable
+from typing import Any
 
 import numpy as np
 from sklearn.model_selection import TimeSeriesSplit, cross_val_score
@@ -22,22 +23,19 @@ def train_or_load_pipeline(
     max_splits: int = 5,
     split_divisor: int = 50,
     scoring: str = "neg_mean_absolute_error",
-    metadata: Optional[Dict] = None,
-    config_signature_data: Optional[Dict[str, Any]] = None,
-    tuner: Optional[
-        Callable[
-            [Pipeline, Any, Any, TimeSeriesSplit, str],
-            Tuple[Pipeline, Optional[float], Dict[str, Any]],
-        ]
-    ] = None,
-) -> Tuple[Pipeline, Optional[float]]:
+    metadata: dict | None = None,
+    config_signature_data: dict[str, Any] | None = None,
+    tuner: Callable[[Pipeline, Any, Any, TimeSeriesSplit, str], tuple[Pipeline, float | None, dict[str, Any]]] | None = None,
+) -> tuple[Pipeline, float | None]:
     """
     Load pipeline artifact if up-to-date, otherwise train with TimeSeriesSplit CV and persist.
     Returns (pipeline, mean_cv_metric).
     """
     latest_idx = X.index.max() if hasattr(X, "index") else None
     pipeline = pipeline_factory()
-    config_signature = _build_config_signature(config_signature_data) if config_signature_data else _build_model_signature(pipeline)
+    config_signature = (
+        _build_config_signature(config_signature_data) if config_signature_data else _build_model_signature(pipeline)
+    )
 
     artifact = persistence.load(key)
     if artifact:
@@ -52,12 +50,14 @@ def train_or_load_pipeline(
     n_splits = min(max_splits, max(min_splits, len(X) // split_divisor))
     tscv = TimeSeriesSplit(n_splits=n_splits)
 
-    tuner_meta: Dict[str, Any] = {}
+    tuner_meta: dict[str, Any] = {}
     if tuner:
         pipeline, cv_metric, tuner_meta = tuner(pipeline, X, y, tscv, scoring)
     else:
         cv_scores = cross_val_score(pipeline, X, y, cv=tscv, scoring=scoring)
-        cv_metric = float(np.mean(np.abs(cv_scores))) if "neg_mean_absolute_error" in scoring else float(np.mean(cv_scores))
+        cv_metric = (
+            float(np.mean(np.abs(cv_scores))) if "neg_mean_absolute_error" in scoring else float(np.mean(cv_scores))
+        )
         pipeline.fit(X, y)
 
     model_signature = _build_model_signature(pipeline)
@@ -92,7 +92,7 @@ def _build_model_signature(pipeline: Pipeline) -> str:
     return f"{model.__class__.__name__}:{digest}"
 
 
-def _build_config_signature(config: Dict[str, Any]) -> str:
+def _build_config_signature(config: dict[str, Any]) -> str:
     """Hash arbitrary config dict for persistence reuse."""
     try:
         blob = json.dumps(config, sort_keys=True, default=str)

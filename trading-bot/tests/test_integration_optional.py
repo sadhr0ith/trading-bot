@@ -1,12 +1,9 @@
 import pathlib
 import tempfile
-from datetime import datetime, timedelta
 
 import numpy as np
 import pandas as pd
-import pytest
 from sklearn.dummy import DummyRegressor
-from sklearn.pipeline import Pipeline
 
 import strategies.short_term_strategy as sts
 from utils import model_persistence

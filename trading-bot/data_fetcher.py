@@ -1,14 +1,14 @@
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-import time
 
 import pandas as pd
 import yfinance as yf
 from binance.client import Client
 
 from models.env_settings import load_binance_settings, load_cache_settings
-from utils.time_utils import parse_period_to_timedelta
 from utils.logger import setup_logger
+from utils.time_utils import parse_period_to_timedelta
 
 logger = setup_logger("TradingBot")
 
@@ -42,19 +42,30 @@ def fetch_binance_data(ticker, interval, period):
         data = pd.DataFrame(
             all_klines,
             columns=[
-                'Open time', 'Open', 'High', 'Low', 'Close', 'Volume',
-                'Close time', 'Quote asset volume', 'Number of trades',
-                'Taker buy base asset volume', 'Taker buy quote asset volume', 'Ignore',
+                "Open time",
+                "Open",
+                "High",
+                "Low",
+                "Close",
+                "Volume",
+                "Close time",
+                "Quote asset volume",
+                "Number of trades",
+                "Taker buy base asset volume",
+                "Taker buy quote asset volume",
+                "Ignore",
             ],
         )
 
-        data['Open time'] = pd.to_datetime(data['Open time'], unit='ms')
-        data['Close time'] = pd.to_datetime(data['Close time'], unit='ms')
-        data[['Open', 'High', 'Low', 'Close', 'Volume']] = data[['Open', 'High', 'Low', 'Close', 'Volume']].apply(pd.to_numeric)
+        data["Open time"] = pd.to_datetime(data["Open time"], unit="ms")
+        data["Close time"] = pd.to_datetime(data["Close time"], unit="ms")
+        data[["Open", "High", "Low", "Close", "Volume"]] = data[["Open", "High", "Low", "Close", "Volume"]].apply(
+            pd.to_numeric
+        )
 
         # Set Open time as index for time-based operations
-        data.set_index('Open time', inplace=True)
-        data.index.name = 'timestamp'
+        data.set_index("Open time", inplace=True)
+        data.index.name = "timestamp"
 
         # Verify index is DatetimeIndex
         assert isinstance(data.index, pd.DatetimeIndex), "Index must be DatetimeIndex for time-based operations"
@@ -70,10 +81,12 @@ def fetch_binance_data(ticker, interval, period):
             median_diff = diffs.median()
             gap_count = (diffs > median_diff * 1.5).sum()
             if gap_count > 0:
-                logger.warning(f"Detected {gap_count} timestamp gap(s) in Binance data; downstream features may be affected.")
+                logger.warning(
+                    f"Detected {gap_count} timestamp gap(s) in Binance data; downstream features may be affected."
+                )
 
         # Log simple data quality metrics
-        nan_counts = data[['Open', 'High', 'Low', 'Close', 'Volume']].isna().sum()
+        nan_counts = data[["Open", "High", "Low", "Close", "Volume"]].isna().sum()
         if nan_counts.sum() > 0:
             logger.warning(f"NaN counts in Binance data: {nan_counts.to_dict()}")
 
@@ -89,14 +102,14 @@ def fetch_binance_klines(client, ticker, interval, period, max_retries: int = 3,
     all_klines = []
     batch_size = 1000
     interval_to_timedelta = {
-        '1m': timedelta(minutes=1),
-        '5m': timedelta(minutes=5),
-        '15m': timedelta(minutes=15),
-        '30m': timedelta(minutes=30),
-        '1h': timedelta(hours=1),
-        '4h': timedelta(hours=4),
-        '1d': timedelta(days=1),
-        '1w': timedelta(weeks=1),
+        "1m": timedelta(minutes=1),
+        "5m": timedelta(minutes=5),
+        "15m": timedelta(minutes=15),
+        "30m": timedelta(minutes=30),
+        "1h": timedelta(hours=1),
+        "4h": timedelta(hours=4),
+        "1d": timedelta(days=1),
+        "1w": timedelta(weeks=1),
     }
 
     end_time = datetime.now(tz=timezone.utc)
@@ -136,7 +149,7 @@ def _get_klines_with_retry(client, ticker, interval, start_time_ms, batch_size, 
             else:
                 logger.warning(f"Binance get_klines failed (attempt {attempt}/{max_retries}): {exc}")
             if attempt < max_retries:
-                sleep_seconds = retry_backoff ** attempt
+                sleep_seconds = retry_backoff**attempt
                 time.sleep(sleep_seconds)
                 continue
             logger.error(f"Exhausted retries fetching klines for {ticker}: {exc}")
@@ -172,7 +185,7 @@ def _save_cache(path: Path, df: pd.DataFrame):
         logger.warning(f"Failed to write cache {path}")
 
 
-def fetch_data_online(source='yahoo', ticker='BTCUSDT', period='1y', interval='1d'):
+def fetch_data_online(source="yahoo", ticker="BTCUSDT", period="1y", interval="1d"):
     cache_settings = load_cache_settings(logger)
     cache_ttl = cache_settings.ttl_seconds if cache_settings else 0
     cache_path = _cache_paths(source, ticker, period, interval)
@@ -182,9 +195,9 @@ def fetch_data_online(source='yahoo', ticker='BTCUSDT', period='1y', interval='1
         logger.info(f"Serving {source}:{ticker} {period}/{interval} from cache (ttl={cache_ttl}s).")
         return cached
 
-    if source == 'yahoo':
+    if source == "yahoo":
         df = fetch_yahoo_data(ticker, period, interval)
-    elif source == 'binance':
+    elif source == "binance":
         df = fetch_binance_data(ticker, interval, period)
     else:
         logger.error(f"Invalid data source: {source}")

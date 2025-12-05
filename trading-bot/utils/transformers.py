@@ -225,23 +225,28 @@ class FeatureSelector(BaseEstimator, TransformerMixin):
         """
         Args:
             feature_columns: List of feature column names to select.
-            handle_missing: How to handle missing values: 'drop' or 'fill' (with 0).
+            handle_missing: How to handle missing values: 'drop', 'ffill', or 'median'.
         """
         self.feature_columns = feature_columns
         self.handle_missing = handle_missing
+        self.medians_ = {}
 
     def fit(self, X, y=None):
-        """Fit does nothing, returns self for pipeline compatibility."""
+        """Fit: compute medians for 'median' strategy."""
+        if self.handle_missing == "median":
+            available = [col for col in self.feature_columns if col in X.columns]
+            self.medians_ = X[available].median().to_dict()
         return self
 
     def transform(self, X):
         """Select features and handle missing values."""
-        # Select only available features
         available_features = [col for col in self.feature_columns if col in X.columns]
         X_selected = X[available_features].copy()
 
-        if self.handle_missing == "fill":
-            X_selected = X_selected.fillna(0)
+        if self.handle_missing == "ffill":
+            X_selected = X_selected.ffill().bfill()
+        elif self.handle_missing == "median":
+            X_selected = X_selected.fillna(self.medians_)
         # 'drop' is handled later in the pipeline or by the caller
 
         return X_selected

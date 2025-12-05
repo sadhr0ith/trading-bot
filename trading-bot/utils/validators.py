@@ -42,9 +42,17 @@ class ConfigValidator:
 
 
 class DataValidator:
-    def __init__(self, min_rows: int = 50, require_ohlcv: bool = True):
-        self.min_rows = min_rows
+    def __init__(
+        self,
+        min_rows: int = 50,
+        require_ohlcv: bool = True,
+        fill_method: str | None = "ffill",
+        outlier_clip_pct: tuple[float, float] = (0.1, 99.9),
+    ):
+        self.min_rows = min_rows or 50
         self.require_ohlcv = require_ohlcv
+        self.fill_method = fill_method
+        self.outlier_clip_pct = outlier_clip_pct
         self.logger = setup_logger(self.__class__.__name__)
 
     def validate(self, data: pd.DataFrame) -> ValidationResult:
@@ -64,26 +72,62 @@ class DataValidator:
         missing_cols = required_columns - set(df.columns)
         if missing_cols:
             errors.append(f"Missing required columns: {sorted(missing_cols)}")
-            # Return immediately to prevent KeyError when accessing missing columns
             return ValidationResult(is_valid=False, errors=errors, warnings=warnings, data=None)
 
-        if len(df) < self.min_rows:
-            warnings.append(f"DataFrame has only {len(df)} rows; minimum recommended is {self.min_rows}.")
+        # Normalize timezone if DatetimeIndex
+        if isinstance(df.index, pd.DatetimeIndex) and df.index.tz is None:
+            df.index = df.index.tz_localize("UTC")
+            self.logger.debug("Localized index to UTC in validator")
 
+        # Deduplicate and sort index
         if df.index.duplicated().any():
             warnings.append("Duplicate index entries detected; keeping first occurrence.")
             df = df[~df.index.duplicated(keep="first")]
 
-        if df[["Close"]].isna().any().any():
-            warnings.append("NaN values detected in Close; dropping those rows.")
-            df = df.dropna(subset=["Close"])
+        if not df.index.is_monotonic_increasing:
+            warnings.append("Index not sorted; sorting now.")
+            df = df.sort_index()
 
-        if "Volume" in df.columns and (df["Volume"] <= 0).any():
-            warnings.append("Non-positive volume rows detected; filtering them out.")
-            df = df[df["Volume"] > 0]
+        if len(df) < self.min_rows:
+            warnings.append(f"DataFrame has only {len(df)} rows; minimum recommended is {self.min_rows}.")
 
-        if (df["Close"] <= 0).any():
+        # Clean all OHLCV columns, not just Close
+        ohlcv_cols = ["Open", "High", "Low", "Close", "Volume"]
+        available_ohlcv = [c for c in ohlcv_cols if c in df.columns]
+
+        # Drop rows with NaN in any OHLCV column
+        nan_before = len(df)
+        df = df.dropna(subset=available_ohlcv)
+        nan_dropped = nan_before - len(df)
+        if nan_dropped > 0:
+            warnings.append(f"Dropped {nan_dropped} rows with NaN in OHLCV columns.")
+
+        # Filter non-positive prices and volume
+        if "Close" in df.columns and (df["Close"] <= 0).any():
             errors.append("Non-positive Close prices detected; aborting.")
+        if "Volume" in df.columns and (df["Volume"] <= 0).any():
+            before = len(df)
+            df = df[df["Volume"] > 0]
+            warnings.append(f"Filtered {before - len(df)} rows with Volume<=0.")
+
+        # Outlier detection and clipping
+        if self.outlier_clip_pct and "Close" in df.columns:
+            returns = df["Close"].pct_change()
+            lower_pct, upper_pct = self.outlier_clip_pct
+            lower_bound = returns.quantile(lower_pct / 100)
+            upper_bound = returns.quantile(upper_pct / 100)
+            clipped_returns = returns.clip(lower=lower_bound, upper=upper_bound)
+            outlier_count = (returns != clipped_returns).sum()
+            if outlier_count > 0:
+                warnings.append(f"Clipped {outlier_count} outlier returns to [{lower_bound:.4f}, {upper_bound:.4f}].")
+
+        # Optional gap filling
+        if self.fill_method:
+            filled_cols = df[available_ohlcv].isna().sum()
+            if filled_cols.sum() > 0:
+                if self.fill_method == "ffill":
+                    df[available_ohlcv] = df[available_ohlcv].ffill()
+                warnings.append(f"Forward-filled missing values in OHLCV columns using {self.fill_method}.")
 
         is_valid = len(errors) == 0
         for warn in warnings:

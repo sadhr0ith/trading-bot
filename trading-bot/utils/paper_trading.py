@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 import contextlib
-import fcntl
 import json
+import time
 from datetime import datetime
 from pathlib import Path
+
+try:
+    import fcntl
+except Exception:  # noqa: BLE001
+    fcntl = None
 
 from models.paper_state import PaperState
 from utils.logger import setup_logger
@@ -26,7 +31,7 @@ class PaperTradingExecutor:
                 state_path = Path("paper_trading_state.json")
 
         # Convert to absolute path to avoid ambiguity
-        self.state_path = Path(state_path).resolve()
+        self.state_path = Path(state_path)
         self.initial_balance = initial_balance
         self.strategy_name = strategy_name
         self.logger = setup_logger(self.__class__.__name__)
@@ -36,8 +41,7 @@ class PaperTradingExecutor:
     def _file_lock(self, path: Path):
         """Context manager for file locking to prevent concurrent access.
 
-        Creates a lock file and uses fcntl (Unix/macOS) for exclusive locking.
-        Automatically releases lock and cleans up lock file on exit.
+        Uses fcntl on Unix; falls back to simple file-based lock for Windows/others.
 
         Args:
             path: Path to the file being locked
@@ -53,30 +57,33 @@ class PaperTradingExecutor:
         lock_path = path.with_suffix(path.suffix + ".lock")
         lock_file = None
         try:
-            # Create/open lock file
-            lock_file = open(lock_path, "w", encoding="utf-8")
-
-            # Acquire exclusive lock (blocking)
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
-            self.logger.debug(f"Acquired lock on {lock_path}")
-
-            yield
-
+            if fcntl:
+                lock_file = open(lock_path, "w", encoding="utf-8")
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+                self.logger.debug(f"Acquired lock on {lock_path}")
+                yield
+            else:
+                while True:
+                    try:
+                        lock_file = open(lock_path, "x", encoding="utf-8")
+                        self.logger.debug(f"Acquired portable lock on {lock_path}")
+                        break
+                    except FileExistsError:
+                        time.sleep(0.1)
+                yield
         finally:
-            # Release lock and cleanup
             if lock_file:
                 try:
-                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+                    if fcntl:
+                        fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
                     lock_file.close()
                     self.logger.debug(f"Released lock on {lock_path}")
                 except Exception:  # noqa: BLE001
                     pass
-
-                # Clean up lock file
-                try:
-                    lock_path.unlink()
-                except Exception:  # noqa: BLE001
-                    pass
+            try:
+                lock_path.unlink()
+            except Exception:  # noqa: BLE001
+                pass
 
     def _load_state(self) -> dict:
         """Load paper trading state from file with file locking."""
@@ -100,7 +107,7 @@ class PaperTradingExecutor:
                         state["strategy_name"] = self.strategy_name
 
                     validated = PaperState.parse_obj(state)
-                    return validated.dict()
+                    return validated.model_dump(exclude_none=True)
                 except Exception:  # noqa: BLE001
                     self.logger.warning("Stored paper trading state invalid; resetting to initial state.")
                     return self._create_initial_state()
@@ -116,7 +123,10 @@ class PaperTradingExecutor:
     def _save_state(self) -> None:
         """Save paper trading state to file with file locking."""
         try:
-            validated = PaperState.parse_obj(self.state)
+            state_copy = dict(self.state)
+            if state_copy.get("strategy_name") is None:
+                state_copy.pop("strategy_name", None)
+            validated = PaperState.parse_obj(state_copy)
         except Exception as exc:  # noqa: BLE001
             self.logger.error(f"Paper trading state failed validation before save: {exc}")
             validated = PaperState(
@@ -129,7 +139,7 @@ class PaperTradingExecutor:
         with self._file_lock(self.state_path):
             self.state_path.parent.mkdir(parents=True, exist_ok=True)
             with open(self.state_path, "w", encoding="utf-8") as f:
-                json.dump(validated.dict(), f, indent=2, default=str)
+                json.dump(validated.model_dump(exclude_none=True), f, indent=2, default=str)
 
     def _current_position(self, symbol: str) -> dict | None:
         return self.state.get("positions", {}).get(symbol)
@@ -161,7 +171,7 @@ class PaperTradingExecutor:
                 "size": size,
                 "pnl": pnl,
                 "reason": reason,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             },
         )
         self.state["positions"].pop(symbol, None)
@@ -195,13 +205,14 @@ class PaperTradingExecutor:
                 return summary
 
             self.state["positions"][symbol] = {
+                "symbol": symbol,
                 "entry_price": price,
                 "size": size,
                 "entry_notional": notional,
                 "stop_loss": risk_manager.stop_loss,
                 "take_profit": risk_manager.take_profit,
                 "peak_price": price,
-                "opened_at": datetime.utcnow().isoformat(),
+                "opened_at": datetime.now(timezone.utc).isoformat(),
             }
             self.state["balance"] -= notional + fee
             self.state["history"].append(
@@ -210,7 +221,7 @@ class PaperTradingExecutor:
                     "action": "BUY",
                     "price": price,
                     "size": size,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                 },
             )
             self._save_state()

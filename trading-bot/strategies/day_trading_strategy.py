@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 import numpy as np
 import pandas as pd
 from keras.callbacks import EarlyStopping
@@ -16,6 +18,7 @@ from utils.strategy_helpers import _build_config_signature
 class DayTradingStrategy(StrategyBase):
     SEQ_LEN = 60
     MIN_ROWS = 60
+    MIN_RETRAIN_SECONDS = 3600
 
     @staticmethod
     def _create_sequences(values: np.ndarray, targets: np.ndarray, seq_len: int):
@@ -76,10 +79,20 @@ class DayTradingStrategy(StrategyBase):
         strategy_name = self.config["strategy"]
 
         self.log_action(f"Executing {strategy_name} strategy for {asset} using LSTM model", "info")
-        recent_data = data.tail(720)
+        recent_data = data.tail(720).copy()
         if recent_data.empty:
             self.log_action("Recent data empty; skipping execution.", "warning")
             return
+
+        # Normalize timezone, deduplicate, sort index
+        if isinstance(recent_data.index, pd.DatetimeIndex) and recent_data.index.tz is None:
+            recent_data.index = recent_data.index.tz_localize("UTC")
+        if recent_data.index.duplicated().any():
+            self.log_action("Duplicate index detected; deduplicating.", "warning")
+            recent_data = recent_data[~recent_data.index.duplicated(keep="first")]
+        if not recent_data.index.is_monotonic_increasing:
+            self.log_action("Index not sorted; sorting now.", "warning")
+            recent_data = recent_data.sort_index()
 
         if self.config.get("use_indicators", True) and "rsi" in self.config.get("indicators", []):
             self.log_action("Calculating RSI indicator...", "info")
@@ -92,15 +105,24 @@ class DayTradingStrategy(StrategyBase):
         if "Volume" not in recent_data.columns:
             self.log_action("Volume column missing; filling Volume with zeros for day-trading features.", "warning")
             recent_data["Volume"] = 0.0
+
+        # Clip returns outliers for stability
         returns = recent_data["Close"].pct_change()
-        recent_data["Volatility_10"] = returns.rolling(10).std()
+        lower_bound = returns.quantile(0.01)
+        upper_bound = returns.quantile(0.99)
+        returns_clipped = returns.clip(lower=lower_bound, upper=upper_bound)
+        recent_data["Volatility_10"] = returns_clipped.rolling(10).std()
+
         # ATR for volatility-adjusted signal
         if all(col in recent_data.columns for col in ["High", "Low", "Close"]):
             high_low = recent_data["High"] - recent_data["Low"]
             high_close = (recent_data["High"] - recent_data["Close"].shift()).abs()
             low_close = (recent_data["Low"] - recent_data["Close"].shift()).abs()
             tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
-            recent_data["ATR_14"] = tr.rolling(14).mean()
+            # Clip ATR outliers
+            atr_raw = tr.rolling(14).mean()
+            atr_upper = atr_raw.quantile(0.99)
+            recent_data["ATR_14"] = atr_raw.clip(upper=atr_upper)
         else:
             recent_data["ATR_14"] = 0.0
 
@@ -121,15 +143,46 @@ class DayTradingStrategy(StrategyBase):
         artifact = persistence.load(strategy_name, is_keras=True)
         if artifact:
             meta = artifact.get("metadata", {})
-            if meta.get("trained_until") == latest_idx:
+            saved_at_raw = meta.get("saved_at")
+            saved_at = None
+            if isinstance(saved_at_raw, str):
+                try:
+                    saved_at = datetime.fromisoformat(saved_at_raw.replace("Z", "+00:00"))
+                except Exception:  # noqa: BLE001
+                    saved_at = None
+            if saved_at is None and isinstance(saved_at_raw, datetime):
+                saved_at = saved_at_raw
+
+            trained_until = meta.get("trained_until")
+            model = artifact.get("model")
+            scalers = artifact.get("scaler") or {}
+            scaler_X = scalers.get("scaler_X")
+            scaler_y = scalers.get("scaler_y")
+
+            can_infer = model is not None and scaler_X is not None and scaler_y is not None
+
+            if trained_until == latest_idx and can_infer:
                 self.log_action("Loaded persisted LSTM pipeline; skipping retrain.", "info")
-                model = artifact["model"]
-                scalers = artifact.get("scaler") or {}
-                scaler_X = scalers.get("scaler_X")
-                scaler_y = scalers.get("scaler_y")
-                if model is None or scaler_X is None or scaler_y is None:
-                    self.log_action("Persisted artifact incomplete; retraining.", "warning")
-                else:
+                return self._inference_only(
+                    model,
+                    scaler_X,
+                    scaler_y,
+                    feature_cols,
+                    feature_values,
+                    asset,
+                    strategy_name,
+                    recent_data,
+                )
+
+            if saved_at and can_infer:
+                saved_at_aware = saved_at if saved_at.tzinfo else saved_at.replace(tzinfo=timezone.utc)
+                saved_at_aware = saved_at_aware.astimezone(timezone.utc)
+                age_seconds = (datetime.now(tz=timezone.utc) - saved_at_aware).total_seconds()
+                if age_seconds < self.MIN_RETRAIN_SECONDS:
+                    self.log_action(
+                        f"Skipping retrain (cooldown {self.MIN_RETRAIN_SECONDS}s, age={age_seconds:.0f}s); reusing model.",
+                        "warning",
+                    )
                     return self._inference_only(
                         model,
                         scaler_X,

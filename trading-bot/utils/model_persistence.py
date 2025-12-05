@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+import time
+from contextlib import contextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -47,6 +49,31 @@ class ModelPersistence:
             return None
         return metadata_files[0].stem
 
+    @contextmanager
+    def _lock(self, strategy: str):
+        """File-based lock to prevent concurrent save/load corruption."""
+        lock_path = self._strategy_dir(strategy) / ".lock"
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        lock_file = None
+        try:
+            while True:
+                try:
+                    lock_file = open(lock_path, "x", encoding="utf-8")
+                    break
+                except FileExistsError:
+                    time.sleep(0.05)
+            yield
+        finally:
+            if lock_file:
+                try:
+                    lock_file.close()
+                except Exception:  # noqa: BLE001
+                    pass
+            try:
+                lock_path.unlink()
+            except Exception:  # noqa: BLE001
+                pass
+
     def save(
         self,
         strategy: str,
@@ -56,35 +83,36 @@ class ModelPersistence:
         version: str | None = None,
         is_keras: bool = False,
     ) -> None:
-        version = version or datetime.utcnow().strftime("%Y%m%dT%H%M%S")
+        version = version or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
         strategy_dir = self._strategy_dir(strategy)
         strategy_dir.mkdir(parents=True, exist_ok=True)
 
-        if is_keras:
-            artifact_path = self._artifact_path(strategy, version, suffix="keras")
-            scaler_path = self._scaler_path(strategy, version)
-            model.save(artifact_path)
-            joblib.dump({"scaler": scaler}, scaler_path)
-        else:
-            artifact_path = self._artifact_path(strategy, version)
-            joblib.dump({"model": model, "scaler": scaler}, artifact_path)
+        with self._lock(strategy):
+            if is_keras:
+                artifact_path = self._artifact_path(strategy, version, suffix="keras")
+                scaler_path = self._scaler_path(strategy, version)
+                model.save(artifact_path)
+                joblib.dump({"scaler": scaler}, scaler_path)
+            else:
+                artifact_path = self._artifact_path(strategy, version)
+                joblib.dump({"model": model, "scaler": scaler}, artifact_path)
 
-        metadata = metadata or {}
-        metadata.update(
-            {
-                "saved_at": datetime.utcnow(),
-                "version": version,
-                "strategy": strategy,
-                "artifact_path": str(artifact_path),
-            }
-        )
-        try:
-            metadata = PersistenceMetadata(**metadata).dict()
-        except PydanticValidationError as exc:
-            self.logger.error(f"Metadata validation failed: {exc}")
-        with open(self._metadata_path(strategy, version), "w", encoding="utf-8") as f:
-            json.dump(metadata, f, indent=2, default=str)
-        self.logger.info(f"Saved model artifact for {strategy} to {artifact_path}")
+            metadata = metadata or {}
+            metadata.update(
+                {
+                    "saved_at": datetime.now(timezone.utc),
+                    "version": version,
+                    "strategy": strategy,
+                    "artifact_path": str(artifact_path),
+                }
+            )
+            try:
+                metadata = PersistenceMetadata(**metadata).dict()
+            except PydanticValidationError as exc:
+                self.logger.error(f"Metadata validation failed: {exc}")
+            with open(self._metadata_path(strategy, version), "w", encoding="utf-8") as f:
+                json.dump(metadata, f, indent=2, default=str)
+            self.logger.info(f"Saved model artifact for {strategy} to {artifact_path}")
 
     def _load_artifact(self, strategy: str, version: str | None, is_keras: bool) -> dict[str, Any] | None:
         if is_keras:
@@ -132,13 +160,14 @@ class ModelPersistence:
         return {"model": model, "scaler": scaler, "metadata": metadata}
 
     def load(self, strategy: str, version: str | None = None, is_keras: bool = False) -> dict[str, Any] | None:
-        if version:
-            return self._load_artifact(strategy, version, is_keras)
+        with self._lock(strategy):
+            if version:
+                return self._load_artifact(strategy, version, is_keras)
 
-        latest_version = self._latest_version(strategy)
-        artifact = self._load_artifact(strategy, latest_version, is_keras) if latest_version else None
-        if artifact:
-            return artifact
+            latest_version = self._latest_version(strategy)
+            artifact = self._load_artifact(strategy, latest_version, is_keras) if latest_version else None
+            if artifact:
+                return artifact
 
-        # Legacy single-file fallback
-        return self._load_artifact(strategy, None, is_keras)
+            # Legacy single-file fallback
+            return self._load_artifact(strategy, None, is_keras)

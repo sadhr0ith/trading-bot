@@ -137,7 +137,7 @@ class ShortTermStrategy(StrategyBase):
                     "feature_selector",
                     FeatureSelector(
                         feature_columns=feature_columns,
-                        handle_missing="fill",
+                        handle_missing="ffill",
                     ),
                 )
             )
@@ -418,7 +418,7 @@ class ShortTermStrategy(StrategyBase):
                 ),
             ),
             ("calendar_features", CalendarFeatureTransformer()),
-            ("feature_selector", FeatureSelector(feature_columns=feature_columns, handle_missing="fill")),
+            ("feature_selector", FeatureSelector(feature_columns=feature_columns, handle_missing="ffill")),
         ]
         pipeline = Pipeline(
             [
@@ -450,4 +450,23 @@ class ShortTermStrategy(StrategyBase):
             f"{predicted_return:.4f} -> {decision} ({reason}) | trade: {trade_summary}",
             self.config["notification_email"],
         )
+        try:
+            from utils.strategy_helpers import _build_config_signature
+
+            config_signature = _build_config_signature({"model": "elasticnet_fallback", "fe_version": "v1"})
+            persistence = ModelPersistence()
+            persistence.save(
+                self.config["strategy"],
+                pipeline,
+                scaler=None,
+                metadata={
+                    "trained_until": str(data_train.index.max()) if hasattr(data_train, "index") else None,
+                    "feature_columns": feature_columns,
+                    "model": "short_term_elasticnet_fallback",
+                    "fe_version": "v1",
+                    "config_signature": config_signature,
+                },
+            )
+        except Exception as exc:  # noqa: BLE001
+            self.log_action(f"Failed to persist fallback model: {exc}", "warning")
         return decision

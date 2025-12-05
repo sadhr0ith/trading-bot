@@ -1,4 +1,5 @@
 import time
+import os
 import hashlib
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -17,10 +18,16 @@ logger = setup_logger("TradingBot")
 def fetch_yahoo_data(ticker, period, interval):
     try:
         logger.info(f"Fetching Yahoo Finance data for {ticker} with period '{period}' and interval '{interval}'...")
-        data = yf.download(ticker, period=period, interval=interval)
+        data = yf.download(ticker, period=period, interval=interval, progress=False, threads=False, timeout=20)
         if data.empty:
             logger.warning("No data returned from Yahoo Finance.")
             return pd.DataFrame()
+
+        # Normalize timezone: Yahoo returns naive DatetimeIndex
+        if isinstance(data.index, pd.DatetimeIndex) and data.index.tz is None:
+            data.index = data.index.tz_localize("UTC")
+            logger.debug("Localized Yahoo data index to UTC")
+
         return data
     except Exception as e:  # noqa: BLE001
         logger.error(f"Error fetching Yahoo Finance data: {str(e)}")
@@ -68,8 +75,18 @@ def _binance_klines_to_dataframe(klines, ticker):
     data.set_index("Open time", inplace=True)
     data.index.name = "timestamp"
 
-    # Verify index is DatetimeIndex
-    assert isinstance(data.index, pd.DatetimeIndex), "Index must be DatetimeIndex for time-based operations"
+    # Verify index is DatetimeIndex (assert is not reliable under PYTHONOPTIMIZE)
+    if not isinstance(data.index, pd.DatetimeIndex):
+        try:
+            data.index = pd.to_datetime(data.index)
+        except Exception:  # noqa: BLE001
+            logger.error("Index is not DatetimeIndex and could not be coerced; dropping fetched frame.")
+            return pd.DataFrame()
+
+    # Normalize timezone: Binance timestamps are UTC
+    if data.index.tz is None:
+        data.index = data.index.tz_localize("UTC")
+        logger.debug(f"Localized Binance data index to UTC for {ticker}")
 
     # Basic data-quality checks
     if len(data) < 50:
@@ -122,8 +139,10 @@ def fetch_binance_klines_since(client, ticker, interval, since_time, max_retries
         "1w": timedelta(weeks=1),
     }
 
-    # Add a small buffer to avoid missing the latest candle
-    start_time = since_time + interval_to_timedelta.get(interval, timedelta(minutes=1))
+    # Start slightly before the last cached candle to avoid gaps (dedup later)
+    start_time = since_time - interval_to_timedelta.get(interval, timedelta(minutes=1))
+    if start_time < datetime.fromtimestamp(0, tz=timezone.utc):
+        start_time = datetime.fromtimestamp(0, tz=timezone.utc)
     end_time = datetime.now(tz=timezone.utc)
 
     # If start time is in the future or equals end time, nothing to fetch
@@ -165,7 +184,12 @@ def fetch_binance_data(ticker, interval, period, enable_incremental=True):
     """
     settings = load_binance_settings(logger)
     if not settings:
-        return pd.DataFrame()
+        api_key = os.getenv("BINANCE_API_KEY")
+        api_secret = os.getenv("BINANCE_API_SECRET")
+        if api_key and api_secret:
+            settings = type("Settings", (), {"api_key": api_key, "api_secret": api_secret})()
+        else:
+            return pd.DataFrame()
 
     # Load cache for incremental fetch
     cache_settings = load_cache_settings(logger)

@@ -46,6 +46,7 @@ nohup.out
 saved_models/
 cache/
 paper_trading_state*.json
+paper_trading_state*.json.lock
 
 # Linters/Formatters
 .mypy_cache/

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import json
 from datetime import datetime
 from pathlib import Path
@@ -23,37 +25,86 @@ class PaperTradingExecutor:
             else:
                 state_path = Path("paper_trading_state.json")
 
-        self.state_path = Path(state_path)
+        # Convert to absolute path to avoid ambiguity
+        self.state_path = Path(state_path).resolve()
         self.initial_balance = initial_balance
         self.strategy_name = strategy_name
         self.logger = setup_logger(self.__class__.__name__)
         self.state = self._load_state()
 
+    @contextlib.contextmanager
+    def _file_lock(self, path: Path):
+        """Context manager for file locking to prevent concurrent access.
+
+        Creates a lock file and uses fcntl (Unix/macOS) for exclusive locking.
+        Automatically releases lock and cleans up lock file on exit.
+
+        Args:
+            path: Path to the file being locked
+
+        Yields:
+            None (lock is held during context)
+
+        Example:
+            >>> with self._file_lock(self.state_path):
+            ...     # Critical section - file operations
+            ...     pass
+        """
+        lock_path = path.with_suffix(path.suffix + ".lock")
+        lock_file = None
+        try:
+            # Create/open lock file
+            lock_file = open(lock_path, "w", encoding="utf-8")
+
+            # Acquire exclusive lock (blocking)
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+            self.logger.debug(f"Acquired lock on {lock_path}")
+
+            yield
+
+        finally:
+            # Release lock and cleanup
+            if lock_file:
+                try:
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+                    lock_file.close()
+                    self.logger.debug(f"Released lock on {lock_path}")
+                except Exception:  # noqa: BLE001
+                    pass
+
+                # Clean up lock file
+                try:
+                    lock_path.unlink()
+                except Exception:  # noqa: BLE001
+                    pass
+
     def _load_state(self) -> dict:
-        if self.state_path.exists():
-            try:
-                with open(self.state_path, encoding="utf-8") as f:
-                    state = json.load(f)
+        """Load paper trading state from file with file locking."""
+        with self._file_lock(self.state_path):
+            if self.state_path.exists():
+                try:
+                    with open(self.state_path, encoding="utf-8") as f:
+                        state = json.load(f)
 
-                # Validate strategy_name if both are present
-                loaded_strategy = state.get("strategy_name")
-                if self.strategy_name and loaded_strategy and loaded_strategy != self.strategy_name:
-                    logger = setup_logger(self.__class__.__name__)
-                    logger.warning(
-                        f"State file strategy mismatch: file has '{loaded_strategy}', "
-                        f"current is '{self.strategy_name}'. This may indicate state file reuse across strategies."
-                    )
+                    # Validate strategy_name if both are present
+                    loaded_strategy = state.get("strategy_name")
+                    if self.strategy_name and loaded_strategy and loaded_strategy != self.strategy_name:
+                        logger = setup_logger(self.__class__.__name__)
+                        logger.warning(
+                            f"State file strategy mismatch: file has '{loaded_strategy}', "
+                            f"current is '{self.strategy_name}'. This may indicate state file reuse across strategies."
+                        )
 
-                # Ensure strategy_name is set in state
-                if self.strategy_name:
-                    state["strategy_name"] = self.strategy_name
+                    # Ensure strategy_name is set in state
+                    if self.strategy_name:
+                        state["strategy_name"] = self.strategy_name
 
-                validated = PaperState.parse_obj(state)
-                return validated.dict()
-            except Exception:  # noqa: BLE001
-                self.logger.warning("Stored paper trading state invalid; resetting to initial state.")
-                return self._create_initial_state()
-        return self._create_initial_state()
+                    validated = PaperState.parse_obj(state)
+                    return validated.dict()
+                except Exception:  # noqa: BLE001
+                    self.logger.warning("Stored paper trading state invalid; resetting to initial state.")
+                    return self._create_initial_state()
+            return self._create_initial_state()
 
     def _create_initial_state(self) -> dict:
         """Create initial state with strategy_name if provided."""
@@ -63,6 +114,7 @@ class PaperTradingExecutor:
         return state
 
     def _save_state(self) -> None:
+        """Save paper trading state to file with file locking."""
         try:
             validated = PaperState.parse_obj(self.state)
         except Exception as exc:  # noqa: BLE001
@@ -73,9 +125,11 @@ class PaperTradingExecutor:
                 history=[],
                 strategy_name=self.strategy_name,
             )
-        self.state_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.state_path, "w", encoding="utf-8") as f:
-            json.dump(validated.dict(), f, indent=2, default=str)
+
+        with self._file_lock(self.state_path):
+            self.state_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.state_path, "w", encoding="utf-8") as f:
+                json.dump(validated.dict(), f, indent=2, default=str)
 
     def _current_position(self, symbol: str) -> dict | None:
         return self.state.get("positions", {}).get(symbol)

@@ -51,7 +51,9 @@ class RiskManager:
             self.config = risk_config
         else:
             try:
-                self.config = RiskConfig(**risk_config)
+                allowed_keys = set(RiskConfig.model_fields.keys())
+                filtered = {k: v for k, v in risk_config.items() if k in allowed_keys}
+                self.config = RiskConfig(**filtered)
             except PydanticValidationError as exc:
                 self.logger.error(f"Invalid risk configuration; using defaults. Details: {exc}")
                 self.config = RiskConfig(max_position_size=default_max_position, trading_fee=trading_fee)

@@ -34,7 +34,12 @@
       "Bash(else)",
       "Bash(fi)",
       "Bash(done)",
-      "Bash(.venv/bin/python:*)"
+      "Bash(.venv/bin/python:*)",
+      "Bash(ruff check:*)",
+      "Bash(.venv/bin/pytest tests/ -v --tb=short -x)",
+      "Bash(.venv/bin/pytest tests/ -v --tb=short -x --no-cov)",
+      "Bash(.venv/bin/pytest tests/ -v --tb=short -x -o addopts=\"\")",
+      "Bash(.venv/bin/pip:*)"
     ],
     "deny": [],
     "ask": []

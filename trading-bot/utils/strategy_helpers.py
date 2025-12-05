@@ -47,7 +47,13 @@ def train_or_load_pipeline(
         ):
             return artifact.get("model"), meta.get("mae_cv")
 
-    n_splits = min(max_splits, max(min_splits, len(X) // split_divisor))
+    n_samples = len(X)
+    if n_samples <= min_splits:
+        raise ValueError(f"Not enough samples for cross-validation: {n_samples} <= {min_splits}")
+    max_possible = max(2, min(n_samples - 1, max_splits))
+    n_splits = min(max_possible, max(min_splits, n_samples // split_divisor, 2))
+    if n_splits >= n_samples:
+        n_splits = max(2, n_samples - 1)
     tscv = TimeSeriesSplit(n_splits=n_splits)
 
     tuner_meta: dict[str, Any] = {}

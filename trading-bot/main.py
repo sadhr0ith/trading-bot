@@ -93,7 +93,8 @@ def run_trading_bot(strategy: str):
                 interval=config.get("interval", "1d"),
             )
 
-            validation = DataValidator(min_rows=config.get("min_rows", 50)).validate(data)
+            min_rows = config.get("min_rows", 50) or 50
+            validation = DataValidator(min_rows=min_rows).validate(data)
             if not validation.is_valid or validation.data is None:
                 logger.warning("Data validation failed or returned empty dataset; skipping strategy execution.")
                 sleep_duration = current_backoff_seconds

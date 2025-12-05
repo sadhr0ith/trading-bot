@@ -51,7 +51,7 @@ class StrategyConfig(_DictLikeModel):
     notification_email: EmailStr | list[EmailStr] | None = None
     seed: int | None = None
     risk_management: RiskConfig = RiskConfig()
-    min_rows: int | None = None
+    min_rows: int = 50
 
     # Decision thresholds (strategy-specific, can be overridden)
     buy_threshold: float | None = None

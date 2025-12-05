@@ -86,7 +86,8 @@ ignore = [
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
-addopts = "-v --tb=short --cov=trading-bot --cov-report=html --cov-report=term"
+# Używamy --cov=. bo katalog ma myślnik w nazwie; raport w html/term
+addopts = "-v --tb=short --cov=. --cov-report=term --cov-report=html"
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]

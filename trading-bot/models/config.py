@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, EmailStr, root_validator, validator
+from pydantic import BaseModel, ConfigDict, EmailStr, field_validator, model_validator
 
 from utils.time_utils import parse_period_to_timedelta
 
@@ -12,8 +12,7 @@ YAHOO_INTERVALS = {"1d", "1wk", "1mo", "1h", "90m"}
 
 
 class _DictLikeModel(BaseModel):
-    class Config:
-        extra = "forbid"
+    model_config = ConfigDict(extra="forbid")
 
     def __getitem__(self, item):
         return getattr(self, item)
@@ -29,7 +28,8 @@ class RiskConfig(_DictLikeModel):
     trading_fee: float = 0.001
     trailing_stop: float | None = None
 
-    @validator("stop_loss", "take_profit", "max_position_size", "trading_fee", "trailing_stop", pre=True, always=True)
+    @field_validator("stop_loss", "take_profit", "max_position_size", "trading_fee", "trailing_stop", mode="before")
+    @classmethod
     def _ensure_range(cls, value):
         if value is None:
             return value
@@ -58,19 +58,22 @@ class StrategyConfig(_DictLikeModel):
     sell_threshold: float | None = None
     min_inference_rows: int | None = None
 
-    @validator("strategy")
+    @field_validator("strategy")
+    @classmethod
     def _validate_strategy(cls, value):
         if value not in ALLOWED_STRATEGIES:
             raise ValueError(f"Unsupported strategy '{value}'. Allowed: {sorted(ALLOWED_STRATEGIES)}")
         return value
 
-    @validator("data_source")
+    @field_validator("data_source")
+    @classmethod
     def _validate_data_source(cls, value):
         if value not in ALLOWED_DATA_SOURCES:
             raise ValueError(f"Unsupported data_source '{value}'. Allowed: {sorted(ALLOWED_DATA_SOURCES)}")
         return value
 
-    @validator("indicators", pre=True)
+    @field_validator("indicators", mode="before")
+    @classmethod
     def _normalize_indicators(cls, value):
         if value is None:
             return set()
@@ -78,14 +81,16 @@ class StrategyConfig(_DictLikeModel):
             value = [value]
         return {str(v).lower() for v in value}
 
-    @validator("indicators")
-    def _validate_indicators(cls, value, values):
+    @field_validator("indicators")
+    @classmethod
+    def _validate_indicators(cls, value):
         invalid = value - ALLOWED_INDICATORS
         if invalid:
             raise ValueError(f"Indicators not implemented: {sorted(invalid)}")
         return value
 
-    @validator("period")
+    @field_validator("period")
+    @classmethod
     def _validate_period(cls, value):
         try:
             parse_period_to_timedelta(value)
@@ -93,7 +98,8 @@ class StrategyConfig(_DictLikeModel):
             raise ValueError(str(exc))
         return value
 
-    @validator("log_level")
+    @field_validator("log_level")
+    @classmethod
     def _normalize_log_level(cls, value):
         if value is None:
             return value
@@ -103,7 +109,8 @@ class StrategyConfig(_DictLikeModel):
             return value
         raise ValueError("log_level should be a string or int")
 
-    @validator("notification_email", pre=True)
+    @field_validator("notification_email", mode="before")
+    @classmethod
     def _coerce_email_list(cls, value):
         if value is None:
             return value
@@ -111,27 +118,19 @@ class StrategyConfig(_DictLikeModel):
             return value
         return [value]
 
-    @root_validator(skip_on_failure=True)
-    def _validate_interval_and_indicators(cls, values):
-        data_source = values.get("data_source")
-        interval = values.get("interval")
-        use_indicators = values.get("use_indicators", True)
-        indicators = values.get("indicators") or set()
+    @model_validator(mode="after")
+    def _validate_interval_and_indicators(self):
+        data_source = self.data_source
+        interval = self.interval
+        if not self.use_indicators:
+            self.indicators = set()
 
-        if not use_indicators:
-            values["indicators"] = set()
-
-        if data_source == "binance":
-            allowed = BINANCE_INTERVALS
-        else:
-            allowed = YAHOO_INTERVALS
-
+        allowed = BINANCE_INTERVALS if data_source == "binance" else YAHOO_INTERVALS
         if interval not in allowed:
             raise ValueError(
                 f"Unsupported interval '{interval}' for source '{data_source}'. Allowed: {sorted(allowed)}"
             )
-
-        return values
+        return self
 
 
 def parse_strategy_config(raw_config) -> StrategyConfig:

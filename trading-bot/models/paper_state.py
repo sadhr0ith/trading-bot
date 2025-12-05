@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class PositionState(BaseModel):
@@ -24,7 +24,8 @@ class TradeRecord(BaseModel):
     pnl: float | None = None
     reason: str | None = None
 
-    @validator("action")
+    @field_validator("action")
+    @classmethod
     def _validate_action(cls, value):
         if value not in {"BUY", "SELL", "CLOSE"}:
             raise ValueError("action must be BUY, SELL, or CLOSE")
@@ -37,5 +38,4 @@ class PaperState(BaseModel):
     history: list[TradeRecord] = Field(default_factory=list)
     strategy_name: str | None = None
 
-    class Config:
-        extra = "ignore"
+    model_config = ConfigDict(extra="ignore")

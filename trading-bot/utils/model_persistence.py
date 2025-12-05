@@ -107,7 +107,7 @@ class ModelPersistence:
                 }
             )
             try:
-                metadata = PersistenceMetadata(**metadata).dict()
+                metadata = PersistenceMetadata(**metadata).model_dump()
             except PydanticValidationError as exc:
                 self.logger.error(f"Metadata validation failed: {exc}")
             with open(self._metadata_path(strategy, version), "w", encoding="utf-8") as f:
@@ -131,7 +131,7 @@ class ModelPersistence:
             try:
                 with open(meta_path, encoding="utf-8") as f:
                     metadata = json.load(f)
-                    metadata = PersistenceMetadata(**metadata).dict()
+                    metadata = PersistenceMetadata(**metadata).model_dump()
             except Exception as exc:  # noqa: BLE001
                 self.logger.warning(f"Failed to parse metadata for {strategy}: {exc}")
                 metadata = {}

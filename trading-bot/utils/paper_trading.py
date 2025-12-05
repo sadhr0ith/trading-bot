@@ -106,7 +106,7 @@ class PaperTradingExecutor:
                     if self.strategy_name:
                         state["strategy_name"] = self.strategy_name
 
-                    validated = PaperState.parse_obj(state)
+                    validated = PaperState.model_validate(state)
                     return validated.model_dump(exclude_none=True)
                 except Exception:  # noqa: BLE001
                     self.logger.warning("Stored paper trading state invalid; resetting to initial state.")
@@ -126,7 +126,7 @@ class PaperTradingExecutor:
             state_copy = dict(self.state)
             if state_copy.get("strategy_name") is None:
                 state_copy.pop("strategy_name", None)
-            validated = PaperState.parse_obj(state_copy)
+            validated = PaperState.model_validate(state_copy)
         except Exception as exc:  # noqa: BLE001
             self.logger.error(f"Paper trading state failed validation before save: {exc}")
             validated = PaperState(

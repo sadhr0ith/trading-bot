@@ -38,7 +38,9 @@ def parse_period_to_timedelta(period: str) -> timedelta:
         - "1d" = 1 day
         - "1w" = 1 week
         - "1M" = 1 month (30 days)
+        - "1mo" = 1 month (30 days, alias)
         - "6M" = 6 months (180 days)
+        - "6mo" = 6 months (180 days, alias)
         - "1y" = 1 year (365 days)
 
     Args:
@@ -57,8 +59,8 @@ def parse_period_to_timedelta(period: str) -> timedelta:
     value, unit = match.groups()
     value = int(value)
 
-    # Map units to timedelta
-    unit_map = {
+    # Map canonical units to timedelta
+    unit_map: dict[str, timedelta] = {
         "m": timedelta(minutes=value),
         "M": timedelta(days=value * 30),  # Approximate month as 30 days
         "w": timedelta(weeks=value),
@@ -67,10 +69,43 @@ def parse_period_to_timedelta(period: str) -> timedelta:
         "y": timedelta(days=value * 365),  # Approximate year as 365 days
     }
 
+    # Friendly aliases (common in broker/finance APIs)
+    aliases: dict[str, str] = {
+        "min": "m",
+        "mins": "m",
+        "minute": "m",
+        "minutes": "m",
+        "hr": "h",
+        "hrs": "h",
+        "hour": "h",
+        "hours": "h",
+        "day": "d",
+        "days": "d",
+        "wk": "w",
+        "wks": "w",
+        "week": "w",
+        "weeks": "w",
+        "mo": "M",
+        "mon": "M",
+        "month": "M",
+        "months": "M",
+        "yr": "y",
+        "yrs": "y",
+        "year": "y",
+        "years": "y",
+    }
+
+    if unit not in unit_map:
+        normalized = unit.lower()
+        canonical = aliases.get(normalized)
+        if canonical is not None:
+            unit = canonical
+
     if unit not in unit_map:
         raise ValueError(
             f"Unknown period unit: {unit}. "
-            f"Valid units: m (minutes), M (months), w (weeks), d (days), h (hours), y (years)"
+            "Valid units: m (minutes), h (hours), d (days), w (weeks), M (months), y (years) "
+            "plus aliases like mo, wk, min, hr."
         )
 
     return unit_map[unit]

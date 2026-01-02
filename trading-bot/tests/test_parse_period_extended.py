@@ -9,6 +9,8 @@ from trading_bot.utils.time_utils import parse_period_to_timedelta
         ("1d", 1),
         ("1w", 7),
         ("1M", 30),  # Fixed: M (uppercase) for months, not m
+        ("1mo", 30),  # Alias: "mo" for months
+        ("6mo", 180),
         ("1y", 365),
     ],
 )

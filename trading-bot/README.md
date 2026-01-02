@@ -45,7 +45,13 @@ python -m trading_bot.train --strategy day_trading_ml
 ```python
 from trading_bot.backtest.portfolio import PortfolioConstraints, run_portfolio_backtest
 
-constraints = PortfolioConstraints(max_positions=5, max_exposure_per_asset=0.2)
+constraints = PortfolioConstraints(
+    max_positions=5,
+    max_exposure_per_asset=0.2,
+    vol_targeting=True,
+    correlation_filter=True,
+    max_pairwise_correlation=0.9,
+)
 result = run_portfolio_backtest(data_by_asset, strategy_factory, constraints=constraints)
 print(result.metrics)
 ```

@@ -28,6 +28,9 @@ class PortfolioConstraints:
     max_exposure_per_asset: float = 0.2
     vol_targeting: bool = True
     vol_window: int = 20
+    correlation_filter: bool = False
+    correlation_window: int = 48
+    max_pairwise_correlation: float = 0.9
 
 
 @dataclass
@@ -103,8 +106,42 @@ def load_top_volume_universe(
 def _prepare_asset_frame(df: pd.DataFrame, vol_window: int) -> pd.DataFrame:
     out = df.copy().sort_index()
     returns = out["Close"].pct_change()
+    out["Return"] = returns
     out["Volatility"] = returns.rolling(vol_window).std()
     return out
+
+
+def _pairwise_return_correlation(
+    frames: dict[str, pd.DataFrame],
+    *,
+    ticker_a: str,
+    ticker_b: str,
+    as_of: pd.Timestamp,
+    window: int,
+) -> float | None:
+    if ticker_a == ticker_b:
+        return 1.0
+    if window < 2:
+        return None
+    df_a = frames.get(ticker_a)
+    df_b = frames.get(ticker_b)
+    if df_a is None or df_b is None:
+        return None
+    if "Return" not in df_a.columns or "Return" not in df_b.columns:
+        return None
+
+    series_a = df_a.loc[:as_of, "Return"].dropna()
+    series_b = df_b.loc[:as_of, "Return"].dropna()
+    if series_a.empty or series_b.empty:
+        return None
+
+    joined = pd.concat({"a": series_a, "b": series_b}, axis=1).dropna().tail(window)
+    if len(joined) < 2:
+        return None
+    corr = joined["a"].corr(joined["b"])
+    if pd.isna(corr):
+        return None
+    return float(corr)
 
 
 def run_portfolio_backtest(
@@ -201,6 +238,7 @@ def run_portfolio_backtest(
         open_positions = sum(1 for s in states.values() if s.position > 0)
         slots = max(0, constraints.max_positions - open_positions)
         if slots > 0:
+            held_tickers = [ticker for ticker, state in states.items() if state.position > 0]
             candidates = [
                 ticker for ticker, signal in signals.items() if signal == Signal.BUY and states[ticker].position <= 0
             ]
@@ -213,7 +251,28 @@ def run_portfolio_backtest(
                     score = abs(window) if pd.notna(window) else 0.0
                     scores.append((ticker, score))
                 scores.sort(key=lambda x: x[1], reverse=True)
-                selected = [ticker for ticker, _ in scores[:slots]]
+                selected: list[str] = []
+                for ticker, _score in scores:
+                    if len(selected) >= slots:
+                        break
+                    if constraints.correlation_filter:
+                        comparisons = held_tickers + selected
+                        if comparisons:
+                            too_correlated = False
+                            for other in comparisons:
+                                corr = _pairwise_return_correlation(
+                                    prepared_frames,
+                                    ticker_a=ticker,
+                                    ticker_b=other,
+                                    as_of=ts,
+                                    window=constraints.correlation_window,
+                                )
+                                if corr is not None and corr >= constraints.max_pairwise_correlation:
+                                    too_correlated = True
+                                    break
+                            if too_correlated:
+                                continue
+                    selected.append(ticker)
 
                 if constraints.vol_targeting:
                     inv_vol = {

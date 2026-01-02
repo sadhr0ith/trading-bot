@@ -1,6 +1,6 @@
 import pytest
 
-from utils.time_utils import parse_period_to_timedelta
+from trading_bot.utils.time_utils import parse_period_to_timedelta
 
 
 @pytest.mark.parametrize(

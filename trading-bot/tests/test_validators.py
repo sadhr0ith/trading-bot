@@ -1,6 +1,6 @@
 import pandas as pd
 
-from utils.validators import ConfigValidator, DataValidator
+from trading_bot.utils.validators import ConfigValidator, DataValidator
 
 
 def test_config_validator_rejects_unknown_indicator():

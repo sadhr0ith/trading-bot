@@ -1,8 +1,8 @@
 import pandas as pd
 
-from strategies.long_term_strategy import LongTermStrategy
-from strategies.mid_term_strategy import MidTermStrategy
-from strategies.short_term_strategy import ShortTermStrategy
+from trading_bot.strategies.long_term_strategy import LongTermStrategy
+from trading_bot.strategies.mid_term_strategy import MidTermStrategy
+from trading_bot.strategies.short_term_strategy import ShortTermStrategy
 
 
 def _make_dummy_data(rows=120):

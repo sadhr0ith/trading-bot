@@ -1,11 +1,17 @@
 """Tests for paper trading state file isolation between strategies."""
 
 import json
+import os
 import tempfile
+import time
 from pathlib import Path
 
-from utils.paper_trading import PaperTradingExecutor
-from utils.risk_management import RiskManager
+import pytest
+from filelock import FileLock
+
+from trading_bot.utils import paper_trading as paper_trading_module
+from trading_bot.utils.paper_trading import PaperTradingExecutor
+from trading_bot.utils.risk_management import RiskManager
 
 
 def test_strategy_specific_state_files():
@@ -55,8 +61,8 @@ def test_default_state_path_with_strategy_name():
             # Create executor with strategy name but no explicit state_path
             executor = PaperTradingExecutor(strategy_name="mid_term", initial_balance=15_000.0)
 
-            # Verify default path was generated with strategy name
-            expected_path = Path("paper_trading_state_mid_term.json")
+            # Verify default path was generated with strategy name in current cwd
+            expected_path = Path(tmpdir).resolve() / "paper_trading_state_mid_term.json"
             assert executor.state_path == expected_path
 
             # Execute a trade to trigger save
@@ -90,8 +96,8 @@ def test_default_state_path_without_strategy_name():
             # Create executor without strategy name or state_path
             executor = PaperTradingExecutor(initial_balance=25_000.0)
 
-            # Verify default path is generic
-            expected_path = Path("paper_trading_state.json")
+            # Verify default path is generic in current cwd
+            expected_path = Path(tmpdir).resolve() / "paper_trading_state.json"
             assert executor.state_path == expected_path
 
             # Verify strategy_name is None
@@ -204,3 +210,50 @@ def test_concurrent_strategies_isolated_states():
             swing_state = json.load(f)
         assert swing_state["strategy_name"] == "swing_trading"
         assert "ETHUSDT" in swing_state["positions"]
+
+
+def test_file_lock_removes_stale(monkeypatch, tmp_path):
+    monkeypatch.setattr(paper_trading_module, "fcntl", None, raising=False)
+    executor = PaperTradingExecutor(state_path=tmp_path / "state.json", initial_balance=1000.0)
+    executor.STALE_LOCK_TTL_SECONDS = 0.1
+    executor.LOCK_TIMEOUT_SECONDS = 1
+
+    lock_path = executor.state_path.with_suffix(".json.lock")
+    lock_path.write_text("locked", encoding="utf-8")
+    old = time.time() - 5
+    os.utime(lock_path, (old, old))
+
+    with executor._file_lock(executor.state_path):
+        assert lock_path.exists()
+
+    assert not lock_path.exists()
+
+
+def test_file_lock_times_out(monkeypatch, tmp_path):
+    executor = PaperTradingExecutor(state_path=tmp_path / "state_timeout.json", initial_balance=1000.0)
+    executor.STALE_LOCK_TTL_SECONDS = 100
+    executor.LOCK_TIMEOUT_SECONDS = 0.2
+
+    lock_path = executor.state_path.with_suffix(".json.lock")
+    blocking_lock = FileLock(str(lock_path))
+    blocking_lock.acquire(timeout=1)
+
+    with pytest.raises(TimeoutError):
+        with executor._file_lock(executor.state_path):
+            pass
+
+    blocking_lock.release()
+
+
+def test_file_lock_cleans_up_after_exception(monkeypatch, tmp_path):
+    """Lock file should be removed even if the protected block raises."""
+    monkeypatch.setattr(paper_trading_module, "fcntl", None, raising=False)
+    executor = PaperTradingExecutor(state_path=tmp_path / "state_cleanup.json", initial_balance=500.0)
+    lock_path = executor.state_path.with_suffix(".json.lock")
+
+    with pytest.raises(RuntimeError):
+        with executor._file_lock(executor.state_path):
+            assert lock_path.exists()
+            raise RuntimeError("boom")
+
+    assert not lock_path.exists(), "Lock file must be removed after exception"

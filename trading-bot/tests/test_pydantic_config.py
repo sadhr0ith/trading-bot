@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from models.config import StrategyConfig, parse_strategy_config
+from trading_bot.models.config import StrategyConfig, parse_strategy_config
 
 
 def _base_config(**overrides):
@@ -58,3 +58,9 @@ def test_parse_strategy_config_accepts_valid_dict():
     cfg = parse_strategy_config(_base_config())
     assert isinstance(cfg, StrategyConfig)
     assert cfg.strategy == "short_term"
+
+
+def test_sleep_seconds_respects_interval_length():
+    cfg = _base_config(interval="1h")
+    with pytest.raises(ValidationError):
+        StrategyConfig(**cfg, sleep_seconds=300)

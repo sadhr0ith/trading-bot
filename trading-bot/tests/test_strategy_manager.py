@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from strategy_manager import select_strategy
+from trading_bot.strategy_manager import select_strategy
 
 
 def test_select_strategy_invalid():

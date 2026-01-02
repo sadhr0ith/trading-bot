@@ -1,7 +1,7 @@
 import os
 from unittest.mock import patch
 
-from utils.email_notifications import send_email
+from trading_bot.utils.email_notifications import send_email
 
 
 def test_send_email_missing_gmail_sender():

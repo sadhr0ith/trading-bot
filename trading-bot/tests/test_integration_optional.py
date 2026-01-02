@@ -5,10 +5,11 @@ import numpy as np
 import pandas as pd
 from sklearn.dummy import DummyRegressor
 
-import strategies.short_term_strategy as sts
-from utils import model_persistence
-from utils.paper_trading import PaperTradingExecutor
-from utils.risk_management import RiskManager
+import trading_bot.strategies.short_term_strategy as sts
+from trading_bot.utils import model_persistence
+from trading_bot.utils.paper_trading import PaperTradingExecutor
+from trading_bot.utils.risk_management import RiskManager
+from trading_bot.utils.strategy_helpers import build_persistence_key
 
 
 def _synthetic_price_data(rows=80):
@@ -42,6 +43,9 @@ def test_short_term_train_save_load_predict_fast(monkeypatch, tmp_path):
     config = {
         "ticker": "TEST",
         "strategy": "short_term",
+        "data_source": "yahoo",
+        "interval": "1d",
+        "period": "1y",
         "indicators": ["macd", "rsi", "adx"],
         "use_indicators": True,
         "notification_email": "none@example.com",
@@ -51,7 +55,13 @@ def test_short_term_train_save_load_predict_fast(monkeypatch, tmp_path):
     strategy.execute()  # should train and persist
 
     # Ensure artifact exists
-    artifacts = list((tmp_path / "models" / "short_term").glob("*.pkl"))
+    persistence_key = build_persistence_key(
+        strategy="short_term",
+        data_source="yahoo",
+        ticker="TEST",
+        interval="1d",
+    )
+    artifacts = list((tmp_path / "models" / persistence_key).glob("*.pkl"))
     assert artifacts, "Expected persisted model artifact"
 
 

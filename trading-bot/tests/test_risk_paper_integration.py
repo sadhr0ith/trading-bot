@@ -1,8 +1,8 @@
 import tempfile
 from pathlib import Path
 
-from utils.paper_trading import PaperTradingExecutor
-from utils.risk_management import RiskManager
+from trading_bot.utils.paper_trading import PaperTradingExecutor
+from trading_bot.utils.risk_management import RiskManager
 
 
 def test_risk_and_executor_integration_buy_sell_hold():

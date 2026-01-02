@@ -1,6 +1,6 @@
 import pytest
 
-from utils.risk_management import Position, RiskManager
+from trading_bot.utils.risk_management import Position, RiskManager
 
 
 def test_trailing_stop_triggers_below_peak():

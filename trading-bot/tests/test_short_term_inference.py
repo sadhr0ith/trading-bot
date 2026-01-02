@@ -8,8 +8,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from utils.paper_trading import PaperTradingExecutor
-from utils.risk_management import RiskManager
+from trading_bot.utils.paper_trading import PaperTradingExecutor
+from trading_bot.utils.risk_management import RiskManager
 
 
 def create_synthetic_data(n_rows=30, start_price=100.0, trend=0.01):

@@ -2,7 +2,7 @@
 
 import pytest
 
-from core.exceptions import (
+from trading_bot.core.exceptions import (
     ConfigurationError,
     DataFetchError,
     DataValidationError,

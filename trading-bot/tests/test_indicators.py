@@ -1,16 +1,11 @@
-import pathlib
-import sys
-
 import pandas as pd
 
-sys.path.append(str(pathlib.Path(__file__).resolve().parents[1]))
-
-from indicators.bollinger_bands import BollingerBands
-from indicators.ema import EMA
-from indicators.macd import MACD
-from indicators.rsi import RSI
-from indicators.sma import SMA
-from indicators.stochastic import StochasticOscillator
+from trading_bot.indicators.bollinger_bands import BollingerBands
+from trading_bot.indicators.ema import EMA
+from trading_bot.indicators.macd import MACD
+from trading_bot.indicators.rsi import RSI
+from trading_bot.indicators.sma import SMA
+from trading_bot.indicators.stochastic import StochasticOscillator
 
 
 def sample_data(n: int = 40) -> pd.DataFrame:

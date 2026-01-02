@@ -28,6 +28,7 @@ dist/
 # IDEs
 .vscode/
 .idea/
+.claude/
 *.swp
 *.swo
 *~
@@ -43,6 +44,7 @@ output.log
 nohup.out
 
 # Trading bot specific
+docs/
 saved_models/
 cache/
 paper_trading_state*.json

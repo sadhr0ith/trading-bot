@@ -51,6 +51,7 @@ class DataValidator:
         outlier_clip_pct: tuple[float, float] | None = None,
         expected_interval: str | None = None,
         assume_normalized: bool = False,
+        drop_nonpositive_volume: bool = True,
     ):
         self.min_rows = min_rows or 50
         self.require_ohlcv = require_ohlcv
@@ -59,6 +60,7 @@ class DataValidator:
         self.expected_interval = expected_interval
         self.logger = get_logger(self.__class__.__name__)
         self.assume_normalized = assume_normalized
+        self.drop_nonpositive_volume = drop_nonpositive_volume
 
     def validate(self, data: pd.DataFrame) -> ValidationResult:
         errors: list[str] = []
@@ -125,7 +127,7 @@ class DataValidator:
         # Filter non-positive prices and volume
         if "Close" in df.columns and (df["Close"] <= 0).any():
             errors.append("Non-positive Close prices detected; aborting.")
-        if "Volume" in df.columns and (df["Volume"] <= 0).any():
+        if self.drop_nonpositive_volume and "Volume" in df.columns and (df["Volume"] <= 0).any():
             before = len(df)
             df = df[df["Volume"] > 0]
             warnings.append(f"Filtered {before - len(df)} rows with Volume<=0.")

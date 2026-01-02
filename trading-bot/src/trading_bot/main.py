@@ -101,6 +101,7 @@ def run_trading_bot(strategy: str):
                 min_rows=min_rows,
                 expected_interval=config.get("interval"),
                 assume_normalized=True,
+                drop_nonpositive_volume=config.get("drop_nonpositive_volume", True),
             ).validate(data)
             if not validation.is_valid or validation.data is None:
                 logger.warning("Data validation failed or returned empty dataset; skipping strategy execution.")

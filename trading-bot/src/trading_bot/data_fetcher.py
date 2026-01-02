@@ -492,11 +492,17 @@ def fetch_binance_data(
 
                 logger.info(f"Incremental: +{len(new_df)} new rows, total {len(combined_df)} rows")
 
+                normalized = _normalize_ohlcv(
+                    combined_df,
+                    expected_interval=interval,
+                    resample_on_mismatch=resample_on_mismatch,
+                )
+
                 # Save updated cache
                 if cache_ttl > 0:
-                    _save_cache(cache_path, combined_df)
+                    _save_cache(cache_path, normalized)
 
-                return _normalize_ohlcv(combined_df, expected_interval=interval, resample_on_mismatch=resample_on_mismatch)
+                return normalized
             else:
                 age = _cache_age_seconds(cache_path)
                 logger.info(
@@ -516,11 +522,13 @@ def fetch_binance_data(
 
         data = _binance_klines_to_dataframe(all_klines, ticker)
 
+        normalized = _normalize_ohlcv(data, expected_interval=interval, resample_on_mismatch=resample_on_mismatch)
+
         # Save cache
         if cache_ttl > 0:
-            _save_cache(cache_path, data)
+            _save_cache(cache_path, normalized)
 
-        return _normalize_ohlcv(data, expected_interval=interval, resample_on_mismatch=resample_on_mismatch)
+        return normalized
 
     except pybreaker.CircuitBreakerError:
         logger.error(f"Binance circuit breaker open; API unavailable for {ticker}")
@@ -742,7 +750,7 @@ def fetch_data_online(
 
     normalized = _normalize_ohlcv(df, expected_interval=interval, resample_on_mismatch=resample_on_mismatch)
 
-    if cache_ttl > 0 and not normalized.empty:
+    if cache_ttl > 0 and not normalized.empty and source != "binance":
         _save_cache(cache_path, normalized)
 
     return normalized

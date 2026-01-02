@@ -216,6 +216,10 @@ class DayTradingStrategy(StrategyBase):
         tuner_grid = self._build_tuner_grid()
         best_cfg = tuner_grid[0]
         best_cv_mae = None
+        try:
+            import tensorflow as tf
+        except ImportError:  # pragma: no cover - TensorFlow required for LSTM strategy
+            tf = None
 
         if n_splits and len(X_seq) > n_splits:
             tscv = None
@@ -229,6 +233,8 @@ class DayTradingStrategy(StrategyBase):
                 for cfg in tuner_grid:
                     fold_mae = []
                     for train_idx, val_idx in tscv.split(X_seq):
+                        if tf is not None:
+                            tf.keras.backend.clear_session()
                         X_train_raw, X_val_raw = X_seq[train_idx], X_seq[val_idx]
                         y_train_raw, y_val_raw = y_seq[train_idx], y_seq[val_idx]
 
@@ -259,7 +265,8 @@ class DayTradingStrategy(StrategyBase):
                             ],
                             verbose=0,
                         )
-                        preds_scaled = model.predict(X_val_scaled, verbose=0)
+                        preds_scaled = model(X_val_scaled, training=False)
+                        preds_scaled = preds_scaled.numpy() if hasattr(preds_scaled, "numpy") else np.asarray(preds_scaled)
                         preds = scaler_y.inverse_transform(preds_scaled).ravel()
                         fold_mae.append(mean_absolute_error(y_val_raw, preds))
                     median_mae = float(np.median(fold_mae))
@@ -302,7 +309,8 @@ class DayTradingStrategy(StrategyBase):
             verbose=0,
         )
 
-        y_pred_scaled = model.predict(X_test_scaled, verbose=0)
+        y_pred_scaled = model(X_test_scaled, training=False)
+        y_pred_scaled = y_pred_scaled.numpy() if hasattr(y_pred_scaled, "numpy") else np.asarray(y_pred_scaled)
         y_pred = scaler_y.inverse_transform(y_pred_scaled).ravel()
         test_mae = mean_absolute_error(y_test_raw, y_pred)
         baseline_naive = X_test_raw[:, -1, 0] if X_test_raw.size else np.array([])

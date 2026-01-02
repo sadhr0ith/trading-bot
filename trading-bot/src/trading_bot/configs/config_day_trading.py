@@ -13,9 +13,17 @@ CONFIG = {
     "interval": "1h",  # Intraday data for day trading
     "indicators": ["rsi", "stochastic"],
     "use_indicators": True,
+    "use_adaptive_thresholds": True,
     "log_level": "DEBUG",
     "notification_email": NOTIFICATION_EMAILS,
     "seed": 42,
+    "use_adaptive_thresholds": True,
+    "adaptive_threshold_config": {
+        "reference_volatility": None,
+    },
+    "lstm_quality_gate_enabled": True,
+    "lstm_quality_gate_ratio": 1.0,
+    "drop_nonpositive_volume": True,
     "risk_management": {
         "stop_loss": 0.01,  # 1% stop loss
         "take_profit": 0.02,  # 2% take profit

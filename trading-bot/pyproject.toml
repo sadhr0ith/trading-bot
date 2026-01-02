@@ -14,7 +14,11 @@ dependencies = [
     "schedule>=1,<2",
     "python-binance>=1,<2",
     "pydantic>=1.10,<3",
+    "pydantic-settings>=2.4,<3",
     "email-validator>=2.0,<3",
+    "filelock>=3.9,<4",
+    "pybreaker>=1.0,<2",
+    "prometheus-client>=0.17,<1",
 ]
 
 [project.optional-dependencies]
@@ -55,12 +59,24 @@ python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
-files = ["trading-bot"]
+files = ["src/trading_bot"]
 exclude = ["venv", ".venv", "tests", "saved_models", "cache"]
 
 [[tool.mypy.overrides]]
 module = ["yfinance.*", "binance.*", "scikeras.*", "tensorflow.*", "xgboost.*"]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+    "trading_bot.config_handler",
+    "trading_bot.models.config",
+    "trading_bot.models.env_settings",
+    "trading_bot.utils.logger",
+    "trading_bot.utils.validators",
+    "trading_bot.utils.time_utils",
+    "trading_bot.strategy_manager",
+]
+disallow_untyped_defs = true
 
 [tool.ruff]
 line-length = 120
@@ -86,8 +102,27 @@ ignore = [
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
-# Używamy --cov=. bo katalog ma myślnik w nazwie; raport w html/term
-addopts = "-v --tb=short --cov=. --cov-report=term --cov-report=html"
+addopts = "-v --tb=short --cov=trading_bot --cov-report=term --cov-report=html"
+pythonpath = ["src"]
+filterwarnings = [
+    "ignore:Protobuf gencode version .*:UserWarning",
+    "ignore:websockets\\.WebSocketClientProtocol is deprecated:DeprecationWarning",
+    "ignore:websockets\\.legacy is deprecated.*:DeprecationWarning",
+]
+
+[tool.coverage.report]
+ignore_errors = true
+omit = [
+    "*/trading-bot/config.py",
+    "*/trading-bot/config-*.py",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["trading_bot*"]
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]

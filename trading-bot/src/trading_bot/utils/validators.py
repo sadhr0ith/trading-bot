@@ -29,6 +29,7 @@ class ConfigValidator:
         "atr_breakout",
         "mean_reversion",
         "regime_switch",
+        "day_trading_ml",
     }
 
     def __init__(self):

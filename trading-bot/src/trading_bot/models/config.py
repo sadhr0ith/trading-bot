@@ -12,6 +12,7 @@ ALLOWED_STRATEGIES = {
     "atr_breakout",
     "mean_reversion",
     "regime_switch",
+    "day_trading_ml",
 }
 ALLOWED_DATA_SOURCES = {"yahoo", "binance"}
 ALLOWED_INDICATORS = {"rsi", "macd", "sma", "ema", "stochastic", "bollinger_bands", "adx"}
@@ -111,6 +112,15 @@ class StrategyConfig(_DictLikeModel):
     volatility_window: int | None = Field(None, ge=1)
     volatility_high_threshold: float | None = Field(None, ge=0)
     cooldown_bars: int | None = Field(None, ge=0)
+
+    # ML strategy parameters
+    return_horizon: int | None = Field(None, ge=1)
+    prediction_threshold: float | None = Field(None, ge=0)
+    slippage_rate: float | None = Field(None, ge=0)
+    ml_min_improvement: float | None = Field(None, ge=0)
+    ml_max_drawdown: float | None = Field(None, ge=0, le=1)
+    ml_min_hit_rate: float | None = Field(None, ge=0, le=1)
+    training_tickers: list[str] | None = None
 
 
     @field_validator("strategy")

@@ -25,6 +25,12 @@ CONFIG = {
     "lstm_quality_gate_ratio": 1.0,
     "drop_nonpositive_volume": True,
     "force_retrain_on_drift": True,
+    "return_horizon": 1,
+    "prediction_threshold": 0.0005,
+    "slippage_rate": 0.0002,
+    "ml_min_hit_rate": 0.52,
+    "ml_max_drawdown": 0.2,
+    "training_tickers": ["ETHUSDT", "BNBUSDT", "SOLUSDT"],
     "risk_management": {
         "stop_loss": 0.01,  # 1% stop loss
         "take_profit": 0.02,  # 2% take profit

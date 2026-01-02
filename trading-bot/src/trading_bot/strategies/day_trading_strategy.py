@@ -10,6 +10,7 @@ from sklearn.preprocessing import MinMaxScaler
 from trading_bot.indicators.rsi import RSI
 from trading_bot.models.lstm_model import create_lstm_model
 from trading_bot.strategies.strategy_base import StrategyBase
+from trading_bot.data_fetcher import fetch_data_online
 from trading_bot.utils.email_notifications import send_email
 from trading_bot.utils.model_persistence import ModelPersistence
 from trading_bot.utils.strategy_helpers import _build_config_signature, build_persistence_key
@@ -85,16 +86,19 @@ class DayTradingStrategy(StrategyBase):
     ):
         latest_sequence = feature_values[-self.SEQ_LEN :]
         latest_scaled = scaler_X.transform(latest_sequence).reshape(1, self.SEQ_LEN, len(feature_cols))
-        predicted_close = float(scaler_y.inverse_transform(model.predict(latest_scaled, verbose=0)).ravel()[0])
+        predicted_return = float(scaler_y.inverse_transform(model.predict(latest_scaled, verbose=0)).ravel()[0])
 
         decision_frame = decision_data if decision_data is not None else recent_data
         last_close = float(decision_frame["Close"].iloc[-1])
-        last_rsi_value = float(decision_frame["RSI"].iloc[-1])
-        msg = f"RSI: {last_rsi_value:.2f}, Predicted next Close: {predicted_close:.4f}, Last Close: {last_close:.4f}"
+        min_edge = self._min_edge()
+        msg = (
+            f"Predicted return: {predicted_return:.6f}, Last Close: {last_close:.4f}, "
+            f"Min edge: {min_edge:.6f}"
+        )
 
-        if last_rsi_value < 30 and predicted_close > last_close:
+        if predicted_return > min_edge:
             decision = "BUY"
-        elif last_rsi_value > 70 and predicted_close < last_close:
+        elif predicted_return < -min_edge:
             decision = "SELL"
         else:
             decision = "HOLD"
@@ -137,6 +141,53 @@ class DayTradingStrategy(StrategyBase):
             return True
         return False
 
+    def _min_edge(self) -> float:
+        fee = float(self.risk_manager.trading_fee)
+        slippage = float(self.config.get("slippage_rate", 0.0002))
+        threshold = float(self.config.get("prediction_threshold", 0.0))
+        return abs(threshold) + fee + slippage
+
+    def _gate_from_metadata(self, meta: dict) -> bool:
+        trade_enabled = not self._quality_gate_blocks(
+            meta.get("test_mae"),
+            meta.get("baseline_mae"),
+        )
+        min_hit_rate = self.config.get("ml_min_hit_rate")
+        hit_rate = meta.get("hit_rate")
+        if trade_enabled and min_hit_rate is not None and hit_rate is not None and hit_rate < min_hit_rate:
+            trade_enabled = False
+        max_dd_limit = self.config.get("ml_max_drawdown")
+        max_dd = meta.get("max_drawdown_proxy")
+        if trade_enabled and max_dd_limit is not None and max_dd is not None and abs(max_dd) > max_dd_limit:
+            trade_enabled = False
+        pnl_proxy = meta.get("pnl_proxy")
+        if trade_enabled and pnl_proxy is not None and pnl_proxy <= 0:
+            trade_enabled = False
+        return trade_enabled
+
+    @staticmethod
+    def _hit_rate_at_threshold(y_true: np.ndarray, y_pred: np.ndarray, threshold: float) -> float | None:
+        if y_true.size == 0 or y_pred.size == 0:
+            return None
+        mask = np.abs(y_pred) > threshold
+        if not np.any(mask):
+            return None
+        hits = np.sign(y_true[mask]) == np.sign(y_pred[mask])
+        return float(np.mean(hits)) if hits.size else None
+
+    @staticmethod
+    def _pnl_proxy(y_true: np.ndarray, y_pred: np.ndarray, threshold: float) -> tuple[float | None, float | None]:
+        if y_true.size == 0 or y_pred.size == 0:
+            return None, None
+        mask = np.abs(y_pred) > threshold
+        if not np.any(mask):
+            return None, None
+        long_returns = np.where(y_pred[mask] > 0, y_true[mask], 0.0)
+        equity = pd.Series((1.0 + long_returns).cumprod())
+        pnl_proxy = float(equity.iloc[-1] - 1.0) if not equity.empty else None
+        max_dd = float((equity / equity.cummax() - 1.0).min()) if not equity.empty else None
+        return pnl_proxy, max_dd
+
     def _run_strategy(self, data):
         asset = self.config["ticker"]
         strategy_name = self.config["strategy"]
@@ -163,6 +214,31 @@ class DayTradingStrategy(StrategyBase):
         if build is None:
             return
         feature_cols, feature_values, target_values, latest_idx, X_seq, y_seq, feature_data = build
+
+        extra_frames = self._load_training_universe()
+        if extra_frames:
+            extra_sequences = []
+            for extra_df in extra_frames:
+                extra_recent = self._prepare_recent_window(extra_df)
+                if extra_recent is None:
+                    continue
+                extra_feature_data = ReturnOutlierClipper(
+                    price_columns=["Close"],
+                    lower_pct=0.1,
+                    upper_pct=99.9,
+                    min_periods=30,
+                ).transform(extra_recent)
+                extra_build = self._build_features(extra_feature_data)
+                if extra_build is None:
+                    continue
+                _, _, _, _, X_seq_extra, y_seq_extra, _ = extra_build
+                if X_seq_extra.size and y_seq_extra.size:
+                    extra_sequences.append((X_seq_extra, y_seq_extra))
+
+            if extra_sequences:
+                X_seq = np.concatenate([X_seq] + [seq[0] for seq in extra_sequences])
+                y_seq = np.concatenate([y_seq] + [seq[1] for seq in extra_sequences])
+                self.log_action(f"Added {len(extra_sequences)} extra assets to LSTM training pool.", "info")
 
         persistence = ModelPersistence()
         artifact = persistence.load(persistence_key, is_keras=True)
@@ -194,10 +270,7 @@ class DayTradingStrategy(StrategyBase):
             if not can_infer:
                 return None
             self.log_action(reason, "info" if "Skipping" in reason or "Loaded" in reason else "warning")
-            trade_enabled = not self._quality_gate_blocks(
-                meta.get("test_mae"),
-                meta.get("baseline_mae_last_close"),
-            )
+            trade_enabled = self._gate_from_metadata(meta)
             return self._inference_only(
                 model,
                 scaler_X,
@@ -346,17 +419,51 @@ class DayTradingStrategy(StrategyBase):
         y_pred_scaled = y_pred_scaled.numpy() if hasattr(y_pred_scaled, "numpy") else np.asarray(y_pred_scaled)
         y_pred = scaler_y.inverse_transform(y_pred_scaled).ravel()
         test_mae = mean_absolute_error(y_test_raw, y_pred)
-        baseline_naive = X_test_raw[:, -1, 0] if X_test_raw.size else np.array([])
-        baseline_mae = mean_absolute_error(y_test_raw, baseline_naive) if baseline_naive.size else None
+
+        baseline_zero = float(np.mean(np.abs(y_test_raw))) if y_test_raw.size else None
+        if y_test_raw.size > 1:
+            baseline_last = mean_absolute_error(y_test_raw[1:], y_test_raw[:-1])
+        else:
+            baseline_last = None
+        baseline_candidates = [val for val in [baseline_zero, baseline_last] if val is not None]
+        baseline_mae = min(baseline_candidates) if baseline_candidates else None
+
+        threshold = self._min_edge()
+        hit_rate = self._hit_rate_at_threshold(y_test_raw, y_pred, threshold)
+        pnl_proxy, max_dd_proxy = self._pnl_proxy(y_test_raw, y_pred, threshold)
 
         walkforward_mae = float(np.median(mae_scores)) if mae_scores else None
         if walkforward_mae is not None:
             self.log_action(f"Walk-forward MAE (median): {walkforward_mae:.4f}", "info")
         self.log_action(f"Test MAE: {test_mae:.4f}", "info")
-        if baseline_mae is not None:
-            self.log_action(f"Naive baseline MAE (predict last close): {baseline_mae:.4f}", "info")
+        if baseline_zero is not None:
+            self.log_action(f"Baseline MAE (predict 0 return): {baseline_zero:.4f}", "info")
+        if baseline_last is not None:
+            self.log_action(f"Baseline MAE (predict last return): {baseline_last:.4f}", "info")
+        if hit_rate is not None:
+            self.log_action(f"Hit rate @ threshold: {hit_rate:.2%}", "info")
+        if pnl_proxy is not None:
+            self.log_action(f"PnL proxy: {pnl_proxy:.4f}", "info")
 
         trade_enabled = not self._quality_gate_blocks(test_mae, baseline_mae)
+        min_hit_rate = self.config.get("ml_min_hit_rate")
+        if trade_enabled and min_hit_rate is not None and hit_rate is not None and hit_rate < min_hit_rate:
+            trade_enabled = False
+            self.log_action(
+                f"Quality gate failed: hit rate {hit_rate:.2%} below {min_hit_rate:.2%}.",
+                "warning",
+            )
+        max_dd_limit = self.config.get("ml_max_drawdown")
+        if trade_enabled and max_dd_limit is not None and max_dd_proxy is not None:
+            if abs(max_dd_proxy) > max_dd_limit:
+                trade_enabled = False
+                self.log_action(
+                    f"Quality gate failed: max drawdown {max_dd_proxy:.4f} exceeds {max_dd_limit:.4f}.",
+                    "warning",
+                )
+        if trade_enabled and pnl_proxy is not None and pnl_proxy <= 0:
+            trade_enabled = False
+            self.log_action("Quality gate failed: PnL proxy <= 0.", "warning")
 
         # Calculate config signature for drift detection
         config_blob = self.config.model_dump() if hasattr(self.config, "model_dump") else self.config
@@ -382,7 +489,13 @@ class DayTradingStrategy(StrategyBase):
                 "walkforward_mae": walkforward_mae,
                 "test_mae": test_mae,
                 "train_rows": len(y_train_raw),
-                "baseline_mae_last_close": baseline_mae,
+                "baseline_mae_zero": baseline_zero,
+                "baseline_mae_last": baseline_last,
+                "baseline_mae": baseline_mae,
+                "hit_rate": hit_rate,
+                "pnl_proxy": pnl_proxy,
+                "max_drawdown_proxy": max_dd_proxy,
+                "fe_version": "v2",
                 "config_signature": config_signature,
                 "ticker": self.config.get("ticker"),
                 "interval": self.config.get("interval"),
@@ -437,6 +550,27 @@ class DayTradingStrategy(StrategyBase):
             recent = recent.sort_index()
         return recent
 
+    def _load_training_universe(self) -> list[pd.DataFrame]:
+        tickers = self.config.get("training_tickers") or []
+        if not tickers:
+            return []
+        frames: list[pd.DataFrame] = []
+        for ticker in tickers:
+            if ticker == self.config.get("ticker"):
+                continue
+            df = fetch_data_online(
+                source=self.config.get("data_source", "binance"),
+                ticker=ticker,
+                period=self.config.get("period", "1y"),
+                interval=self.config.get("interval", "1h"),
+                cache_ttl_seconds=self.config.get("cache_ttl_seconds"),
+            )
+            if df is None or df.empty:
+                self.log_action(f"No training data for {ticker}; skipping.", "warning")
+                continue
+            frames.append(df)
+        return frames
+
     def _build_features(self, recent_data: pd.DataFrame):
         if self.config.get("use_indicators", True) and "rsi" in self.config.get("indicators", []):
             self.log_action("Calculating RSI indicator...", "info")
@@ -481,8 +615,14 @@ class DayTradingStrategy(StrategyBase):
 
         self._log_feature_stats(recent_data[feature_cols], stage="train/inference window")
 
+        horizon = int(self.config.get("return_horizon", 1))
+        recent_data["target"] = recent_data["Close"].pct_change(horizon).shift(-horizon)
+        recent_data = recent_data.dropna(subset=feature_cols + ["target"])
+        if len(recent_data) <= self.SEQ_LEN:
+            self.log_action("Not enough rows to build LSTM sequences after target alignment.", "warning")
+            return None
         feature_values = recent_data[feature_cols].values
-        target_values = recent_data["Close"].values
+        target_values = recent_data["target"].values
         X_seq, y_seq = self._create_sequences(feature_values, target_values, self.SEQ_LEN)
         latest_idx = self._latest_index(recent_data)
         return feature_cols, feature_values, target_values, latest_idx, X_seq, y_seq, recent_data

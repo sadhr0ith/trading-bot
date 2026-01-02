@@ -8,6 +8,7 @@ This module contains implementations of different trading strategies:
 - ATRBreakoutStrategy: trend breakout with ATR stops
 - MeanReversionStrategy: Bollinger + RSI mean reversion
 - RegimeSwitchStrategy: trend/range routing with vol filter
+- DayTradingMLStrategy: tabular ML intraday returns
 
 All strategies inherit from StrategyBase and implement the execute() method.
 """
@@ -20,6 +21,7 @@ from trading_bot.strategies.long_term_strategy import LongTermStrategy
 from trading_bot.strategies.atr_breakout_strategy import ATRBreakoutStrategy
 from trading_bot.strategies.mean_reversion_strategy import MeanReversionStrategy
 from trading_bot.strategies.regime_switch_strategy import RegimeSwitchStrategy
+from trading_bot.strategies.day_trading_ml_strategy import DayTradingMLStrategy
 
 __all__ = [
     "StrategyBase",
@@ -30,4 +32,5 @@ __all__ = [
     "ATRBreakoutStrategy",
     "MeanReversionStrategy",
     "RegimeSwitchStrategy",
+    "DayTradingMLStrategy",
 ]

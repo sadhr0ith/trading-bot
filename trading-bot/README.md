@@ -26,7 +26,8 @@ pip install -r requirements-dev.txt
 ## Run
 ```bash
 python main.py --strategy short_term
-# available: day_trading | short_term | mid_term | long_term | atr_breakout | mean_reversion | regime_switch
+python main.py --strategy day_trading_ml
+# available: day_trading | day_trading_ml | short_term | mid_term | long_term | atr_breakout | mean_reversion | regime_switch
 ```
 
 ## Backtest
@@ -45,7 +46,8 @@ print(result.metrics)
 
 ## Features
 - Strategies:
-  - `day_trading` (LSTM, 1h)
+  - `day_trading` (LSTM, intraday returns)
+  - `day_trading_ml` (tabular ML, intraday returns)
   - `short_term` (XGBoost, 5-day horizon)
   - `mid_term` (RandomForest, 20-day horizon)
   - `long_term` (RandomForest, 50-day horizon)

@@ -13,6 +13,7 @@ _STRATEGY_REGISTRY: dict[str, str] = {
     "atr_breakout": "trading_bot.strategies.atr_breakout_strategy.ATRBreakoutStrategy",
     "mean_reversion": "trading_bot.strategies.mean_reversion_strategy.MeanReversionStrategy",
     "regime_switch": "trading_bot.strategies.regime_switch_strategy.RegimeSwitchStrategy",
+    "day_trading_ml": "trading_bot.strategies.day_trading_ml_strategy.DayTradingMLStrategy",
 }
 
 

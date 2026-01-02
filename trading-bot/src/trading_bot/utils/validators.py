@@ -21,7 +21,15 @@ class ValidationResult:
 class ConfigValidator:
     REQUIRED_FIELDS = {"strategy", "data_source", "ticker", "period", "interval", "indicators"}
     ALLOWED_DATA_SOURCES = {"yahoo", "binance"}
-    ALLOWED_STRATEGIES = {"day_trading", "short_term", "mid_term", "long_term"}
+    ALLOWED_STRATEGIES = {
+        "day_trading",
+        "short_term",
+        "mid_term",
+        "long_term",
+        "atr_breakout",
+        "mean_reversion",
+        "regime_switch",
+    }
 
     def __init__(self):
         self.logger = get_logger(self.__class__.__name__)

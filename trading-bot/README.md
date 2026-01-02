@@ -1,67 +1,78 @@
 # Trading Bot
 
-Multi-strategy trading bot (crypto/stocks) with ML pipelines, technical indicators, paper-trading executor i prostą obsługą ryzyka.
+Multi-strategy trading bot (crypto/stocks) with ML pipelines, technical indicators, paper trading, and backtesting.
 
-## Wymagania
-- Python 3.12 (zalecany)
-- Zależności z `requirements.txt` (produkcyjne) oraz `requirements-dev.txt` (dev/test)
+## Requirements
+- Python 3.12 (recommended)
+- Dependencies from `requirements.txt` (prod) and `requirements-dev.txt` (dev/test)
 
-## Instalacja
+## Installation
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-# dla pracy developerskiej
+# for development
 pip install -r requirements-dev.txt
 ```
 
-## Konfiguracja
-1) Skopiuj `.env.example` → `.env` i uzupełnij:
-   - `BINANCE_API_KEY` / `BINANCE_API_SECRET` (opcjonalnie dla źródła binance)
-   - `GMAIL_SENDER_EMAIL` / `GMAIL_APP_PASSWORD` (dla powiadomień e-mail)
-   - `NOTIFICATION_EMAILS` (lista odbiorców, rozdzielona przecinkami)
-   - `TRADING_BOT_CACHE_TTL_SECONDS` (opcjonalny cache fetcha)
-2) Wybierz/edytuj konfigurację strategii w `configs/config_<strategy>.py` (ticker, okres, interwał, wskaźniki, progi ryzyka).
+## Configuration
+1) Copy `.env.example` -> `.env` and fill in:
+   - `BINANCE_API_KEY` / `BINANCE_API_SECRET` (optional for Binance)
+   - `GMAIL_SENDER_EMAIL` / `GMAIL_APP_PASSWORD` (email notifications)
+   - `NOTIFICATION_EMAILS` (comma-separated list)
+   - `TRADING_BOT_CACHE_TTL_SECONDS` (optional fetch cache)
+2) Choose/edit a strategy config in `configs/config_<strategy>.py`.
 
-## Uruchomienie
+## Run
 ```bash
 python main.py --strategy short_term
-# dostępne: day_trading | short_term | mid_term | long_term
+# available: day_trading | short_term | mid_term | long_term | atr_breakout | mean_reversion | regime_switch
 ```
 
-## Funkcje
-- 4 strategie:
-  - `day_trading` (LSTM, 1h)
-  - `short_term` (XGBoost, 5-dniowy horyzont)
-  - `mid_term` (RandomForest, 20 dni)
-  - `long_term` (RandomForest, 50 dni)
-- Wskaźniki: RSI, MACD, SMA/EMA, Bollinger Bands, ADX, Stochastic.
-- Paper trading z izolowanym stanem per strategia, obsługa SL/TP/fee.
-- Persistencja modeli (sklearn/keras) i detekcja driftu konfigu.
-- Walidacja danych (Pydantic + sanity checks OHLCV).
-
-## Testy i jakość
+## Backtest
 ```bash
-pytest tests/ -v
-ruff check trading-bot/
-black trading-bot/
-isort trading-bot/
-mypy trading-bot/
+python -m trading_bot.backtest.cli --strategy atr_breakout --ticker BTCUSDT --interval 1h --period 1y
 ```
 
-## Struktura
+## Portfolio Backtest (multi-asset)
+```python
+from trading_bot.backtest.portfolio import PortfolioConstraints, run_portfolio_backtest
+
+constraints = PortfolioConstraints(max_positions=5, max_exposure_per_asset=0.2)
+result = run_portfolio_backtest(data_by_asset, strategy_factory, constraints=constraints)
+print(result.metrics)
+```
+
+## Features
+- Strategies:
+  - `day_trading` (LSTM, 1h)
+  - `short_term` (XGBoost, 5-day horizon)
+  - `mid_term` (RandomForest, 20-day horizon)
+  - `long_term` (RandomForest, 50-day horizon)
+  - `atr_breakout` (Donchian + ATR)
+  - `mean_reversion` (BB + RSI)
+  - `regime_switch` (trend/range + vol filter)
+- Indicators: RSI, MACD, SMA/EMA, Bollinger Bands, ADX, Stochastic.
+- Paper trading with isolated state per strategy, SL/TP/fee handling.
+- Model persistence (sklearn/keras) and config drift detection.
+- Data validation (Pydantic + OHLCV sanity checks).
+- Backtest with net-of-costs metrics and JSON reports.
+- Portfolio backtest (multi-asset, exposure constraints).
+
+## Structure
 ```
 trading-bot/
-├── configs/           # konfiguracje strategii
-├── strategies/        # implementacje strategii + StrategyBase
-├── indicators/        # wskaźniki techniczne
-├── utils/             # walidatory, logowanie, cache, persistence, paper trading
-├── models/            # modele Pydantic + konstruktor LSTM
-├── tests/             # testy jednostkowe/integracyjne
-└── saved_models/      # artefakty modeli (lokalnie, ignorowane w VCS)
+├── configs/           # strategy configs
+├── strategies/        # strategy implementations + StrategyBase
+├── indicators/        # technical indicators
+├── utils/             # validators, logging, cache, persistence, paper trading
+├── models/            # Pydantic models + LSTM builder
+├── backtest/          # backtest engine + metrics + report
+├── tests/             # unit/integration tests
+└── saved_models/      # model artifacts (local, gitignored)
 ```
 
-## Uwagi operacyjne
-- Bot domyślnie działa w trybie paper trading; brak realnej egzekucji.
-- Dane Binance pobierane są stronicowane; warto ustawić cache TTL dla lżejszych startów.
-- Retraining jest kosztowny (szczególnie LSTM); w środowisku prod rozważ rozdzielenie jobów trening/inferencja.
+## Operational notes
+- Paper trading only by default; no real execution.
+- Binance data is paginated; cache TTL helps reduce API load.
+- Retraining can be expensive (especially LSTM); consider separating training/inference in production.

@@ -4,7 +4,15 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, mo
 
 from trading_bot.utils.time_utils import interval_to_seconds, parse_period_to_timedelta
 
-ALLOWED_STRATEGIES = {"day_trading", "short_term", "mid_term", "long_term"}
+ALLOWED_STRATEGIES = {
+    "day_trading",
+    "short_term",
+    "mid_term",
+    "long_term",
+    "atr_breakout",
+    "mean_reversion",
+    "regime_switch",
+}
 ALLOWED_DATA_SOURCES = {"yahoo", "binance"}
 ALLOWED_INDICATORS = {"rsi", "macd", "sma", "ema", "stochastic", "bollinger_bands", "adx"}
 BINANCE_INTERVALS = {"1m", "5m", "15m", "30m", "1h", "4h", "1d", "1w"}
@@ -80,6 +88,30 @@ class StrategyConfig(_DictLikeModel):
     min_inference_rows: int | None = None
     use_adaptive_thresholds: bool = False
     adaptive_threshold_config: AdaptiveThresholdConfig = Field(default_factory=AdaptiveThresholdConfig)
+
+    # ATR breakout / trend parameters
+    donchian_window: int | None = Field(None, ge=1)
+    atr_window: int | None = Field(None, ge=1)
+    atr_stop_mult: float | None = Field(None, ge=0)
+    atr_trail_mult: float | None = Field(None, ge=0)
+    time_stop_bars: int | None = Field(None, ge=1)
+
+    # Mean reversion parameters
+    bb_window: int | None = Field(None, ge=1)
+    bb_num_std: float | None = Field(None, gt=0)
+    rsi_period: int | None = Field(None, ge=1)
+    rsi_oversold: float | None = Field(None, ge=0, le=100)
+    rsi_overbought: float | None = Field(None, ge=0, le=100)
+    max_loss_pct: float | None = Field(None, ge=0, le=1)
+    partial_take_profit_pct: float | None = Field(None, ge=0, le=1)
+
+    # Regime switching parameters
+    adx_window: int | None = Field(None, ge=1)
+    adx_trend_threshold: float | None = Field(None, ge=0)
+    volatility_window: int | None = Field(None, ge=1)
+    volatility_high_threshold: float | None = Field(None, ge=0)
+    cooldown_bars: int | None = Field(None, ge=0)
+
 
     @field_validator("strategy")
     @classmethod

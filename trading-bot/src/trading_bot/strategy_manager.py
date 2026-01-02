@@ -10,6 +10,9 @@ _STRATEGY_REGISTRY: dict[str, str] = {
     "short_term": "trading_bot.strategies.short_term_strategy.ShortTermStrategy",
     "mid_term": "trading_bot.strategies.mid_term_strategy.MidTermStrategy",
     "long_term": "trading_bot.strategies.long_term_strategy.LongTermStrategy",
+    "atr_breakout": "trading_bot.strategies.atr_breakout_strategy.ATRBreakoutStrategy",
+    "mean_reversion": "trading_bot.strategies.mean_reversion_strategy.MeanReversionStrategy",
+    "regime_switch": "trading_bot.strategies.regime_switch_strategy.RegimeSwitchStrategy",
 }
 
 

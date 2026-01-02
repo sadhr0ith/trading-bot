@@ -81,6 +81,10 @@ class StrategyConfig(_DictLikeModel):
     inference_only: bool = False
     lstm_quality_gate_enabled: bool = True
     lstm_quality_gate_ratio: float = Field(1.0, gt=0)
+    lstm_benchmark_enabled: bool = True
+    lstm_benchmark_strategy: str | None = "day_trading_ml"
+    lstm_benchmark_required: bool = True
+    lstm_benchmark_min_delta: float = Field(0.0, ge=0)
     force_retrain_on_drift: bool = False
 
     # Decision thresholds (strategy-specific, can be overridden)

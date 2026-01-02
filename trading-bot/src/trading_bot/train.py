@@ -98,6 +98,8 @@ def main() -> int:
             "hit_rate": metadata.get("hit_rate"),
             "pnl_proxy": metadata.get("pnl_proxy"),
             "max_drawdown_proxy": metadata.get("max_drawdown_proxy"),
+            "pnl_proxy_net": metadata.get("pnl_proxy_net"),
+            "max_drawdown_proxy_net": metadata.get("max_drawdown_proxy_net"),
         },
         "feature_version": metadata.get("fe_version"),
         "feature_columns": metadata.get("feature_columns"),

@@ -30,6 +30,7 @@ from trading_bot.utils.feature_engineering import (
     create_forward_return_target,
 )
 from trading_bot.utils.model_persistence import ModelPersistence
+from trading_bot.utils.proxy_metrics import long_only_proxy
 from trading_bot.utils.strategy_helpers import _build_config_signature, build_persistence_key, train_or_load_pipeline
 
 
@@ -140,6 +141,30 @@ class DayTradingMLStrategy(StrategyBase):
                 return False
         return True
 
+    def _gate_from_metadata(self, meta: dict) -> bool:
+        cv_mae = meta.get("cv_mae", meta.get("mae_cv"))
+        baseline_mae = meta.get("baseline_mae")
+        proxy_max_dd = meta.get("max_drawdown_proxy_net", meta.get("max_drawdown_proxy"))
+
+        if not self._quality_gate(cv_mae, baseline_mae, proxy_max_dd):
+            return False
+
+        min_hit_rate = self.config.get("ml_min_hit_rate")
+        hit_rate = meta.get("hit_rate")
+        if min_hit_rate is not None and hit_rate is not None and hit_rate < min_hit_rate:
+            self.log_action(
+                f"Quality gate failed: hit rate {hit_rate:.2%} below {min_hit_rate:.2%}.",
+                "warning",
+            )
+            return False
+
+        pnl_proxy = meta.get("pnl_proxy_net", meta.get("pnl_proxy"))
+        if pnl_proxy is not None and pnl_proxy <= 0:
+            self.log_action("Quality gate failed: PnL proxy <= 0.", "warning")
+            return False
+
+        return True
+
     def _min_edge(self) -> float:
         fee = float(self.risk_manager.trading_fee)
         base = abs(self.prediction_threshold)
@@ -181,21 +206,17 @@ class DayTradingMLStrategy(StrategyBase):
         persistence = ModelPersistence()
 
         if inference_only:
-            try:
-                pipeline, _ = train_or_load_pipeline(
-                    key=persistence_key,
-                    persistence=persistence,
-                    pipeline_factory=self._pipeline_factory,
-                    X=X_inference,
-                    y=data_inference["target"],
-                    feature_columns=feature_columns,
-                    gap=self.horizon,
-                    load_only=True,
-                )
-            except Exception as exc:
-                self.log_action(f"Inference-only mode but no model found: {exc}", "warning")
+            artifact = persistence.load(persistence_key)
+            if not artifact:
+                self.log_action("Inference-only mode but no persisted model found.", "warning")
                 return
-            self._run_inference(pipeline, X_inference, asset, strategy_name, trade_enabled=True)
+            pipeline = artifact.get("model")
+            meta = artifact.get("metadata", {}) if artifact else {}
+            trade_enabled = self._gate_from_metadata(meta or {})
+            if pipeline is None:
+                self.log_action("Inference-only mode but model artifact missing; skipping.", "warning")
+                return
+            self._run_inference(pipeline, X_inference, asset, strategy_name, trade_enabled=trade_enabled)
             return
 
         X_train = data_train[feature_columns]
@@ -246,8 +267,11 @@ class DayTradingMLStrategy(StrategyBase):
             return
 
         pred_train = pipeline.predict(X_train)
-        proxy = self._proxy_metrics(y_train, pred_train, self.prediction_threshold)
-        trade_enabled = self._quality_gate(cv_mae, baseline_mae, proxy.get("max_drawdown"))
+        threshold = self._min_edge()
+        proxy = self._proxy_metrics(y_train, pred_train, threshold)
+        cost_per_side = float(self.risk_manager.trading_fee) + float(self.slippage_rate)
+        proxy_net = long_only_proxy(y_train.values, pred_train, threshold=threshold, cost_per_side=cost_per_side)
+        trade_enabled = self._quality_gate(cv_mae, baseline_mae, proxy_net.get("max_drawdown"))
 
         latest_idx = X_train.index.max() if hasattr(X_train, "index") else None
         persistence.save(
@@ -262,6 +286,10 @@ class DayTradingMLStrategy(StrategyBase):
                 "hit_rate": proxy.get("hit_rate"),
                 "pnl_proxy": proxy.get("pnl_proxy"),
                 "max_drawdown_proxy": proxy.get("max_drawdown"),
+                "pnl_proxy_net": proxy_net.get("pnl_proxy"),
+                "max_drawdown_proxy_net": proxy_net.get("max_drawdown"),
+                "proxy_entries": proxy_net.get("entries"),
+                "proxy_exits": proxy_net.get("exits"),
                 "config_signature": config_signature,
                 "trained_until": str(latest_idx),
                 "feature_columns": feature_columns,

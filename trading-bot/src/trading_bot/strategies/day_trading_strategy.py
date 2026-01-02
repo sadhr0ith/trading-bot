@@ -13,6 +13,7 @@ from trading_bot.strategies.strategy_base import StrategyBase
 from trading_bot.data_fetcher import fetch_data_online
 from trading_bot.utils.email_notifications import send_email
 from trading_bot.utils.model_persistence import ModelPersistence
+from trading_bot.utils.proxy_metrics import long_only_proxy
 from trading_bot.utils.strategy_helpers import _build_config_signature, build_persistence_key
 from trading_bot.utils.transformers import ReturnOutlierClipper
 
@@ -157,11 +158,13 @@ class DayTradingStrategy(StrategyBase):
         if trade_enabled and min_hit_rate is not None and hit_rate is not None and hit_rate < min_hit_rate:
             trade_enabled = False
         max_dd_limit = self.config.get("ml_max_drawdown")
-        max_dd = meta.get("max_drawdown_proxy")
+        max_dd = meta.get("max_drawdown_proxy_net", meta.get("max_drawdown_proxy"))
         if trade_enabled and max_dd_limit is not None and max_dd is not None and abs(max_dd) > max_dd_limit:
             trade_enabled = False
-        pnl_proxy = meta.get("pnl_proxy")
+        pnl_proxy = meta.get("pnl_proxy_net", meta.get("pnl_proxy"))
         if trade_enabled and pnl_proxy is not None and pnl_proxy <= 0:
+            trade_enabled = False
+        if trade_enabled and not self._benchmark_gate(meta):
             trade_enabled = False
         return trade_enabled
 
@@ -187,6 +190,60 @@ class DayTradingStrategy(StrategyBase):
         pnl_proxy = float(equity.iloc[-1] - 1.0) if not equity.empty else None
         max_dd = float((equity / equity.cummax() - 1.0).min()) if not equity.empty else None
         return pnl_proxy, max_dd
+
+    def _benchmark_gate(self, lstm_meta: dict) -> bool:
+        if not self.config.get("lstm_benchmark_enabled", True):
+            return True
+        benchmark_strategy = self.config.get("lstm_benchmark_strategy", "day_trading_ml")
+        if not benchmark_strategy:
+            return True
+
+        required = bool(self.config.get("lstm_benchmark_required", True))
+        min_delta = float(self.config.get("lstm_benchmark_min_delta", 0.0) or 0.0)
+
+        data_source = self.config.get("data_source")
+        ticker = self.config.get("ticker")
+        interval = self.config.get("interval")
+        benchmark_key = build_persistence_key(
+            strategy=benchmark_strategy,
+            data_source=data_source,
+            ticker=ticker,
+            interval=interval,
+        )
+        benchmark_meta = ModelPersistence().load_metadata(benchmark_key) or {}
+
+        bench_pnl = benchmark_meta.get("pnl_proxy_net", benchmark_meta.get("pnl_proxy"))
+        lstm_pnl = lstm_meta.get("pnl_proxy_net", lstm_meta.get("pnl_proxy"))
+
+        if bench_pnl is None or lstm_pnl is None:
+            if required:
+                self.log_action(
+                    f"Quality gate failed: missing benchmark metrics for {benchmark_strategy}.",
+                    "warning",
+                )
+                return False
+            return True
+
+        try:
+            bench_pnl = float(bench_pnl)
+            lstm_pnl = float(lstm_pnl)
+        except (TypeError, ValueError):
+            if required:
+                self.log_action(
+                    f"Quality gate failed: invalid benchmark metrics for {benchmark_strategy}.",
+                    "warning",
+                )
+                return False
+            return True
+
+        if lstm_pnl <= bench_pnl + min_delta:
+            self.log_action(
+                f"Quality gate failed: LSTM pnl_proxy_net {lstm_pnl:.4f} not above "
+                f"{benchmark_strategy} {bench_pnl:.4f} (+{min_delta:.4f}).",
+                "warning",
+            )
+            return False
+        return True
 
     def _run_strategy(self, data):
         asset = self.config["ticker"]
@@ -431,6 +488,10 @@ class DayTradingStrategy(StrategyBase):
         threshold = self._min_edge()
         hit_rate = self._hit_rate_at_threshold(y_test_raw, y_pred, threshold)
         pnl_proxy, max_dd_proxy = self._pnl_proxy(y_test_raw, y_pred, threshold)
+        cost_per_side = float(self.risk_manager.trading_fee) + float(self.config.get("slippage_rate", 0.0002))
+        proxy_net = long_only_proxy(y_test_raw, y_pred, threshold=threshold, cost_per_side=cost_per_side)
+        pnl_proxy_net = proxy_net.get("pnl_proxy")
+        max_dd_proxy_net = proxy_net.get("max_drawdown")
 
         walkforward_mae = float(np.median(mae_scores)) if mae_scores else None
         if walkforward_mae is not None:
@@ -444,6 +505,8 @@ class DayTradingStrategy(StrategyBase):
             self.log_action(f"Hit rate @ threshold: {hit_rate:.2%}", "info")
         if pnl_proxy is not None:
             self.log_action(f"PnL proxy: {pnl_proxy:.4f}", "info")
+        if pnl_proxy_net is not None:
+            self.log_action(f"PnL proxy (net): {pnl_proxy_net:.4f}", "info")
 
         trade_enabled = not self._quality_gate_blocks(test_mae, baseline_mae)
         min_hit_rate = self.config.get("ml_min_hit_rate")
@@ -454,16 +517,20 @@ class DayTradingStrategy(StrategyBase):
                 "warning",
             )
         max_dd_limit = self.config.get("ml_max_drawdown")
-        if trade_enabled and max_dd_limit is not None and max_dd_proxy is not None:
-            if abs(max_dd_proxy) > max_dd_limit:
+        dd_value = max_dd_proxy_net if max_dd_proxy_net is not None else max_dd_proxy
+        if trade_enabled and max_dd_limit is not None and dd_value is not None:
+            if abs(dd_value) > max_dd_limit:
                 trade_enabled = False
                 self.log_action(
-                    f"Quality gate failed: max drawdown {max_dd_proxy:.4f} exceeds {max_dd_limit:.4f}.",
+                    f"Quality gate failed: max drawdown {dd_value:.4f} exceeds {max_dd_limit:.4f}.",
                     "warning",
                 )
-        if trade_enabled and pnl_proxy is not None and pnl_proxy <= 0:
+        pnl_value = pnl_proxy_net if pnl_proxy_net is not None else pnl_proxy
+        if trade_enabled and pnl_value is not None and pnl_value <= 0:
             trade_enabled = False
             self.log_action("Quality gate failed: PnL proxy <= 0.", "warning")
+        if trade_enabled and not self._benchmark_gate({"pnl_proxy_net": pnl_proxy_net, "pnl_proxy": pnl_proxy}):
+            trade_enabled = False
 
         # Calculate config signature for drift detection
         config_blob = self.config.model_dump() if hasattr(self.config, "model_dump") else self.config
@@ -495,6 +562,8 @@ class DayTradingStrategy(StrategyBase):
                 "hit_rate": hit_rate,
                 "pnl_proxy": pnl_proxy,
                 "max_drawdown_proxy": max_dd_proxy,
+                "pnl_proxy_net": pnl_proxy_net,
+                "max_drawdown_proxy_net": max_dd_proxy_net,
                 "fe_version": "v2",
                 "config_signature": config_signature,
                 "ticker": self.config.get("ticker"),

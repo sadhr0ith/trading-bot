@@ -38,8 +38,10 @@ python -m trading_bot.backtest.cli --strategy atr_breakout --ticker BTCUSDT --in
 ## ML Training (separate from inference)
 ```bash
 python -m trading_bot.train --strategy day_trading_ml
+python -m trading_bot.train --strategy day_trading
 ```
 - The live loop enforces `inference_only=True` for ML strategies; training is run via the command above.
+- `day_trading` (LSTM) is benchmark-gated against `day_trading_ml` by default; if the benchmark model/metrics are missing or better, LSTM trades are skipped.
 
 ## Portfolio Backtest (multi-asset)
 ```python

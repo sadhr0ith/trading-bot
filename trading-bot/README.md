@@ -1,6 +1,7 @@
 # Trading Bot
 
 Multi-strategy trading bot (crypto/stocks) with ML pipelines, technical indicators, paper trading, and backtesting.
+See `quick-start.md` for a minimal end-to-end workflow.
 
 ## Requirements
 - Python 3.12 (recommended)

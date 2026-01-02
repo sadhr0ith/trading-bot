@@ -8,6 +8,7 @@ from trading_bot.config_handler import get_sleep_duration, load_config
 from trading_bot.core.exceptions import InsufficientDataError, ModelPersistenceError, TradingBotError
 from trading_bot.data_fetcher import fetch_data_online
 from trading_bot.strategy_manager import select_strategy
+from trading_bot.utils.data_health import data_health_report, feature_shift_report
 from trading_bot.utils.logger import get_logger
 from trading_bot.utils.model_persistence import ModelPersistence
 from trading_bot.utils.strategy_helpers import _build_config_signature, build_persistence_key
@@ -17,6 +18,8 @@ logger = get_logger(__name__)
 
 # Global shutdown flag
 shutdown_requested = False
+
+_ML_STRATEGIES = {"day_trading", "short_term", "mid_term", "long_term", "day_trading_ml"}
 
 
 def signal_handler(signum, frame):
@@ -52,6 +55,24 @@ def _warn_on_config_drift(strategy_name, config) -> bool:
     return False
 
 
+def _ensure_inference_only(config, strategy: str):
+    if strategy not in _ML_STRATEGIES:
+        return config
+    if config.get("inference_only"):
+        return config
+    logger.info("Enabling inference_only for ML strategy; use `python -m trading_bot.train` to retrain.")
+    if hasattr(config, "model_copy"):
+        return config.model_copy(update={"inference_only": True})
+    if isinstance(config, dict):
+        config["inference_only"] = True
+        return config
+    try:
+        setattr(config, "inference_only", True)
+    except AttributeError:
+        pass
+    return config
+
+
 def run_trading_bot(strategy: str):
     """
     Run the trading bot loop for the given strategy: load config, validate, fetch data, execute strategy with backoff.
@@ -74,6 +95,8 @@ def run_trading_bot(strategy: str):
     if not config_result.is_valid:
         logger.error("Configuration validation failed; aborting.")
         return
+
+    config = _ensure_inference_only(config, strategy)
 
     drift_detected = _warn_on_config_drift(strategy, config)
     if drift_detected and config.get("force_retrain_on_drift"):
@@ -122,6 +145,30 @@ def run_trading_bot(strategy: str):
                 current_backoff_seconds = min(current_backoff_seconds * 2, max_backoff_seconds)
                 continue
             data = validation.data
+
+            health = data_health_report(data, config.get("interval"))
+            if health.get("status") == "ok":
+                logger.info(f"Data health: {health}")
+            else:
+                logger.warning(f"Data health: {health}")
+
+            drift = feature_shift_report(data)
+            if drift:
+                logger.info(f"Feature shift: {drift}")
+
+            persistence_key = build_persistence_key(
+                strategy=strategy,
+                data_source=config.get("data_source"),
+                ticker=config.get("ticker"),
+                interval=config.get("interval"),
+            )
+            metadata = ModelPersistence().load_metadata(persistence_key) or {}
+            baseline_mae = metadata.get("baseline_mae")
+            cv_mae = metadata.get("cv_mae")
+            if baseline_mae is not None and cv_mae is not None and cv_mae >= baseline_mae:
+                logger.warning(
+                    "Performance decay detected: cv_mae %.6f >= baseline_mae %.6f", cv_mae, baseline_mae
+                )
 
             current_backoff_seconds = base_backoff_seconds
             strategy_instance = select_strategy(config, data)
@@ -181,7 +228,7 @@ if __name__ == "__main__":
         type=str,
         required=True,
         choices=sorted(ALLOWED_STRATEGIES),
-        help="Strategy to run: 'day_trading', 'short_term', 'mid_term', 'long_term'",
+        help="Strategy to run (see configs/ for options).",
     )
     args = parser.parse_args()
 

@@ -35,6 +35,12 @@ python main.py --strategy day_trading_ml
 python -m trading_bot.backtest.cli --strategy atr_breakout --ticker BTCUSDT --interval 1h --period 1y
 ```
 
+## ML Training (separate from inference)
+```bash
+python -m trading_bot.train --strategy day_trading_ml
+```
+- The live loop enforces `inference_only=True` for ML strategies; training is run via the command above.
+
 ## Portfolio Backtest (multi-asset)
 ```python
 from trading_bot.backtest.portfolio import PortfolioConstraints, run_portfolio_backtest

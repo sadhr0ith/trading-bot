@@ -21,6 +21,7 @@ CONFIG = {
     "ml_min_improvement": 0.05,
     "ml_max_drawdown": 0.2,
     "min_inference_rows": 120,
+    "inference_only": True,
     "risk_management": {
         "stop_loss": 0.01,
         "take_profit": 0.02,

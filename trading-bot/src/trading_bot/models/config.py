@@ -68,6 +68,8 @@ class StrategyConfig(_DictLikeModel):
     cache_ttl_seconds: int | None = Field(None, ge=0)
     sleep_seconds: int | None = Field(None, ge=0)
     inference_only: bool = False
+    lstm_quality_gate_enabled: bool = True
+    lstm_quality_gate_ratio: float = Field(1.0, gt=0)
 
     # Decision thresholds (strategy-specific, can be overridden)
     buy_threshold: float = Field(0.005, ge=0)

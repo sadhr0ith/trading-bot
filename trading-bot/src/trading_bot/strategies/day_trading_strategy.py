@@ -81,6 +81,7 @@ class DayTradingStrategy(StrategyBase):
         strategy_name,
         recent_data,
         decision_data: pd.DataFrame | None = None,
+        trade_enabled: bool = True,
     ):
         latest_sequence = feature_values[-self.SEQ_LEN :]
         latest_scaled = scaler_X.transform(latest_sequence).reshape(1, self.SEQ_LEN, len(feature_cols))
@@ -99,6 +100,9 @@ class DayTradingStrategy(StrategyBase):
             decision = "HOLD"
 
         self.log_action(f"{msg} -> {decision} signal", "info")
+        if not trade_enabled:
+            self.log_action("Quality gate active; skipping trade execution and notifications.", "warning")
+            return decision
         trade_summary = self.order_executor.process_signal(asset, decision, last_close, self.risk_manager)
         if trade_summary.get("status") not in {"noop", "already_long"}:
             self.log_action(f"Paper trade summary: {trade_summary}", "info")
@@ -108,6 +112,30 @@ class DayTradingStrategy(StrategyBase):
             self.config["notification_email"],
         )
         return decision
+
+    def _quality_gate_blocks(self, test_mae: float | None, baseline_mae: float | None) -> bool:
+        if not self.config.get("lstm_quality_gate_enabled", True):
+            return False
+        if test_mae is None or baseline_mae is None:
+            return False
+        try:
+            test_mae = float(test_mae)
+            baseline_mae = float(baseline_mae)
+        except (TypeError, ValueError):
+            return False
+        if baseline_mae <= 0:
+            return False
+        ratio = self.config.get("lstm_quality_gate_ratio", 1.0) or 1.0
+        if ratio <= 0:
+            ratio = 1.0
+        if test_mae > baseline_mae * ratio:
+            self.log_action(
+                f"Quality gate failed: test MAE {test_mae:.4f} exceeds "
+                f"baseline {baseline_mae:.4f} * {ratio:.2f}.",
+                "warning",
+            )
+            return True
+        return False
 
     def _run_strategy(self, data):
         asset = self.config["ticker"]
@@ -166,6 +194,10 @@ class DayTradingStrategy(StrategyBase):
             if not can_infer:
                 return None
             self.log_action(reason, "info" if "Skipping" in reason or "Loaded" in reason else "warning")
+            trade_enabled = not self._quality_gate_blocks(
+                meta.get("test_mae"),
+                meta.get("baseline_mae_last_close"),
+            )
             return self._inference_only(
                 model,
                 scaler_X,
@@ -176,6 +208,7 @@ class DayTradingStrategy(StrategyBase):
                 strategy_name,
                 feature_data,
                 decision_data=decision_data,
+                trade_enabled=trade_enabled,
             )
 
         if inference_only:
@@ -323,6 +356,8 @@ class DayTradingStrategy(StrategyBase):
         if baseline_mae is not None:
             self.log_action(f"Naive baseline MAE (predict last close): {baseline_mae:.4f}", "info")
 
+        trade_enabled = not self._quality_gate_blocks(test_mae, baseline_mae)
+
         # Calculate config signature for drift detection
         config_blob = self.config.model_dump() if hasattr(self.config, "model_dump") else self.config
         if isinstance(config_blob, dict):
@@ -367,6 +402,7 @@ class DayTradingStrategy(StrategyBase):
             strategy_name,
             feature_data,
             decision_data=decision_data,
+            trade_enabled=trade_enabled,
         )
 
     def _log_feature_stats(self, df, stage: str):

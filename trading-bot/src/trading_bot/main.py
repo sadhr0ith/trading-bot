@@ -27,13 +27,13 @@ def signal_handler(signum, frame):
     shutdown_requested = True
 
 
-def _warn_on_config_drift(strategy_name, config):
+def _warn_on_config_drift(strategy_name, config) -> bool:
     """Compare runtime config hash with persisted metadata if available."""
     try:
         config_blob = config.model_dump() if hasattr(config, "model_dump") else config
         current_signature = _build_config_signature(config_blob)
     except (ValueError, TypeError, AttributeError):
-        return
+        return False
 
     persistence_key = build_persistence_key(
         strategy=strategy_name,
@@ -43,11 +43,13 @@ def _warn_on_config_drift(strategy_name, config):
     )
     metadata = ModelPersistence().load_metadata(persistence_key)
     if not metadata:
-        return
+        return False
 
     persisted_signature = metadata.get("config_signature")
     if persisted_signature and persisted_signature != current_signature:
         logger.warning("Config drift detected: runtime config differs from persisted model metadata.")
+        return True
+    return False
 
 
 def run_trading_bot(strategy: str):
@@ -73,7 +75,16 @@ def run_trading_bot(strategy: str):
         logger.error("Configuration validation failed; aborting.")
         return
 
-    _warn_on_config_drift(strategy, config)
+    drift_detected = _warn_on_config_drift(strategy, config)
+    if drift_detected and config.get("force_retrain_on_drift"):
+        persistence_key = build_persistence_key(
+            strategy=strategy,
+            data_source=config.get("data_source"),
+            ticker=config.get("ticker"),
+            interval=config.get("interval"),
+        )
+        ModelPersistence().purge(persistence_key)
+        logger.warning("Purged persisted model due to config drift.")
 
     # Respect log level configured for the strategy
     logger = get_logger(__name__, config.get("log_level"))

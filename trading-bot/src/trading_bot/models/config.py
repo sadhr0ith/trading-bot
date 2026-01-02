@@ -71,6 +71,7 @@ class StrategyConfig(_DictLikeModel):
     inference_only: bool = False
     lstm_quality_gate_enabled: bool = True
     lstm_quality_gate_ratio: float = Field(1.0, gt=0)
+    force_retrain_on_drift: bool = False
 
     # Decision thresholds (strategy-specific, can be overridden)
     buy_threshold: float = Field(0.005, ge=0)

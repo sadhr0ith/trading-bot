@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import pickle
 import time
 from contextlib import contextmanager
@@ -213,3 +214,26 @@ class ModelPersistence:
 
             # Legacy single-file fallback
             return self._load_artifact(strategy, None, is_keras)
+
+    def purge(self, strategy: str) -> None:
+        """Delete all persisted artifacts for a strategy key."""
+        with self._lock(strategy):
+            strategy_dir = self._strategy_dir(strategy)
+            if strategy_dir.exists():
+                for child in strategy_dir.iterdir():
+                    if child.name == ".lock":
+                        continue
+                    if child.is_dir():
+                        shutil.rmtree(child, ignore_errors=True)
+                    else:
+                        child.unlink(missing_ok=True)
+                try:
+                    if not any(strategy_dir.iterdir()):
+                        strategy_dir.rmdir()
+                except OSError:
+                    pass
+
+            # Legacy single-file artifacts (no versioned dir)
+            self._artifact_path(strategy).unlink(missing_ok=True)
+            self._scaler_path(strategy).unlink(missing_ok=True)
+            self._metadata_path(strategy).unlink(missing_ok=True)

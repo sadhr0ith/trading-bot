@@ -24,6 +24,7 @@ CONFIG = {
     "lstm_quality_gate_enabled": True,
     "lstm_quality_gate_ratio": 1.0,
     "drop_nonpositive_volume": True,
+    "force_retrain_on_drift": True,
     "risk_management": {
         "stop_loss": 0.01,  # 1% stop loss
         "take_profit": 0.02,  # 2% take profit

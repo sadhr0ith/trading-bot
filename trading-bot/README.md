@@ -35,6 +35,12 @@ python main.py --strategy day_trading_ml
 python -m trading_bot.backtest.cli --strategy atr_breakout --ticker BTCUSDT --interval 1h --period 1y
 ```
 
+## Portfolio Backtest (CLI)
+```bash
+python -m trading_bot.backtest.portfolio_cli --strategy atr_breakout --tickers BTCUSDT,ETHUSDT --interval 1h --period 1y
+python -m trading_bot.backtest.portfolio_cli --strategy regime_switch --universe-limit 10 --interval 1h --period 6M
+```
+
 ## ML Training (separate from inference)
 ```bash
 python -m trading_bot.train --strategy day_trading_ml

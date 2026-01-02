@@ -1,0 +1,25 @@
+import os
+import random
+
+import numpy as np
+
+try:
+    import tensorflow as tf
+except ImportError:
+    tf = None
+
+
+def set_global_seeds(seed: int | None = None) -> int:
+    """
+    Set seeds for reproducibility across random, numpy and tensorflow (if available).
+    Returns the seed used.
+    """
+    resolved_seed = seed if seed is not None else int(os.getenv("TRADING_BOT_SEED", 42))
+    random.seed(resolved_seed)
+    np.random.seed(resolved_seed)
+    if tf is not None:
+        try:
+            tf.random.set_seed(resolved_seed)
+        except (RuntimeError, ValueError):
+            pass
+    return resolved_seed

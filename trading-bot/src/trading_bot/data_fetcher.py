@@ -448,13 +448,14 @@ def fetch_binance_data(
         DataFrame with OHLCV data
     """
     settings = load_binance_settings(logger)
-    if not settings:
-        api_key = os.getenv("BINANCE_API_KEY")
-        api_secret = os.getenv("BINANCE_API_SECRET")
-        if api_key and api_secret:
-            settings = type("Settings", (), {"api_key": api_key, "api_secret": api_secret})()
-        else:
-            return pd.DataFrame()
+    api_key = os.getenv("BINANCE_API_KEY")
+    api_secret = os.getenv("BINANCE_API_SECRET")
+    if settings:
+        api_key = settings.api_key or api_key
+        api_secret = settings.api_secret or api_secret
+
+    if not (api_key and api_secret):
+        logger.info("Binance API keys not set; using public endpoints for market data.")
 
     # Load cache for incremental fetch
     cache_settings = load_cache_settings(logger)
@@ -466,7 +467,7 @@ def fetch_binance_data(
         cached_df = _load_cache(cache_path, cache_ttl)
 
     try:
-        client = Client(api_key=settings.api_key, api_secret=settings.api_secret)
+        client = Client(api_key=api_key, api_secret=api_secret)
 
         # Incremental fetch if cache available
         if enable_incremental and cached_df is not None and len(cached_df) > 0:

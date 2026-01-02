@@ -11,8 +11,8 @@ T = TypeVar("T", bound=BaseSettings)
 class BinanceSettings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore", env_prefix="BINANCE_", populate_by_name=True)
 
-    api_key: str
-    api_secret: str
+    api_key: str | None = None
+    api_secret: str | None = None
 
 
 class EmailSettings(BaseSettings):

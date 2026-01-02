@@ -422,7 +422,8 @@ class DayTradingStrategy(StrategyBase):
             return
 
     def _prepare_recent_window(self, data: pd.DataFrame) -> pd.DataFrame | None:
-        recent = data.tail(720).copy()
+        window_rows = self.config.get("train_window_rows") or 720
+        recent = data.tail(window_rows).copy()
         if recent.empty:
             self.log_action("Recent data empty; skipping execution.", "warning")
             return None

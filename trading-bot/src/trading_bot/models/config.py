@@ -65,6 +65,7 @@ class StrategyConfig(_DictLikeModel):
     seed: int | None = None
     risk_management: RiskConfig = Field(default_factory=RiskConfig)
     min_rows: int = Field(50, ge=1)
+    train_window_rows: int | None = Field(None, ge=1)
     drop_nonpositive_volume: bool = True
     cache_ttl_seconds: int | None = Field(None, ge=0)
     sleep_seconds: int | None = Field(None, ge=0)

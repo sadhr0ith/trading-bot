@@ -9,11 +9,10 @@ CONFIG = {
     "strategy": "day_trading",
     "data_source": "binance",  # or 'binance'
     "ticker": "BTCUSDT",  # Example for stock (use "BTCUSDT" for crypto)
-    "period": "6M",
+    "period": "1y",
     "interval": "1h",  # Intraday data for day trading
     "indicators": ["rsi", "stochastic"],
     "use_indicators": True,
-    "use_adaptive_thresholds": True,
     "log_level": "DEBUG",
     "notification_email": NOTIFICATION_EMAILS,
     "seed": 42,
@@ -21,6 +20,7 @@ CONFIG = {
     "adaptive_threshold_config": {
         "reference_volatility": None,
     },
+    "train_window_rows": 8760,
     "lstm_quality_gate_enabled": True,
     "lstm_quality_gate_ratio": 1.0,
     "drop_nonpositive_volume": True,

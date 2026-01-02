@@ -60,6 +60,18 @@ def test_parse_strategy_config_accepts_valid_dict():
     assert cfg.strategy == "short_term"
 
 
+def test_adaptive_threshold_config_parses():
+    cfg = StrategyConfig(
+        **_base_config(
+            use_adaptive_thresholds=True,
+            adaptive_threshold_config={"volatility_window": 10, "reference_volatility": None},
+        )
+    )
+    assert cfg.use_adaptive_thresholds is True
+    assert cfg.adaptive_threshold_config.volatility_window == 10
+    assert cfg.adaptive_threshold_config.reference_volatility is None
+
+
 def test_sleep_seconds_respects_interval_length():
     cfg = _base_config(interval="1h")
     with pytest.raises(ValidationError):

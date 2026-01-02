@@ -197,6 +197,19 @@ class TestCalculateAdaptiveThreshold:
 
         assert result <= 0.01 * 3.0
 
+    def test_dynamic_reference_volatility(self, sample_data, base_config):
+        """Uses historical median volatility when reference is None."""
+        strategy = ConcreteStrategy(base_config, sample_data)
+
+        result = strategy._calculate_adaptive_threshold(
+            sample_data,
+            base_threshold=0.01,
+            reference_volatility=None,
+        )
+
+        assert isinstance(result, float)
+        assert result > 0
+
 
 class TestGetAdaptiveThresholds:
     """Tests for _get_adaptive_thresholds method."""

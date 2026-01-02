@@ -39,6 +39,19 @@ class RiskConfig(_DictLikeModel):
         return value
 
 
+class AdaptiveThresholdConfig(_DictLikeModel):
+    volatility_window: int = Field(20, ge=2)
+    reference_volatility: float | None = Field(0.02, ge=0)
+    min_multiplier: float = Field(0.5, gt=0)
+    max_multiplier: float = Field(3.0, gt=0)
+
+    @model_validator(mode="after")
+    def _validate_multipliers(self):
+        if self.min_multiplier > self.max_multiplier:
+            raise ValueError("min_multiplier must be <= max_multiplier")
+        return self
+
+
 class StrategyConfig(_DictLikeModel):
     strategy: str
     data_source: str
@@ -57,9 +70,11 @@ class StrategyConfig(_DictLikeModel):
     inference_only: bool = False
 
     # Decision thresholds (strategy-specific, can be overridden)
-    buy_threshold: float | None = None
-    sell_threshold: float | None = None
+    buy_threshold: float = Field(0.005, ge=0)
+    sell_threshold: float = Field(-0.005, le=0)
     min_inference_rows: int | None = None
+    use_adaptive_thresholds: bool = False
+    adaptive_threshold_config: AdaptiveThresholdConfig = Field(default_factory=AdaptiveThresholdConfig)
 
     @field_validator("strategy")
     @classmethod

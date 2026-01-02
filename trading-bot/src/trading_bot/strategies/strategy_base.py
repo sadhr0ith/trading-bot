@@ -147,7 +147,7 @@ class StrategyBase(ABC):
         data: pd.DataFrame,
         base_threshold: float,
         volatility_window: int = 20,
-        reference_volatility: float = 0.02,
+        reference_volatility: float | None = 0.02,
         min_multiplier: float = 0.5,
         max_multiplier: float = 3.0,
     ) -> float:
@@ -186,6 +186,14 @@ class StrategyBase(ABC):
             if recent_volatility <= 0 or np.isnan(recent_volatility):
                 return base_threshold
 
+            if reference_volatility is None or reference_volatility <= 0 or np.isnan(reference_volatility):
+                historical_vol = returns.rolling(volatility_window).std().dropna()
+                if historical_vol.empty:
+                    return base_threshold
+                reference_volatility = float(historical_vol.median())
+                if reference_volatility <= 0 or np.isnan(reference_volatility):
+                    return base_threshold
+
             # Calculate volatility multiplier (clamped between min and max)
             volatility_multiplier = recent_volatility / reference_volatility
             volatility_multiplier = max(min_multiplier, min(max_multiplier, volatility_multiplier))
@@ -195,6 +203,7 @@ class StrategyBase(ABC):
             self.logger.info(
                 f"Adaptive threshold: {adaptive_threshold:.4f} "
                 f"(base={base_threshold:.4f}, volatility={recent_volatility:.4f}, "
+                f"ref_vol={reference_volatility:.4f}, "
                 f"multiplier={volatility_multiplier:.2f})"
             )
 

@@ -63,7 +63,7 @@ class DayTradingMLStrategy(StrategyBase):
         bb = BollingerBands(out, window=20, num_std=2.0).calculate()
         out["BB_Width"] = bb["BB_Width"]
 
-        adx = ADX(out, period=14).calculate()
+        adx = ADX(out, window=14).calculate()
         out["ADX"] = adx["ADX"]
 
         out["Volatility_10"] = out["Close"].pct_change().rolling(10).std()

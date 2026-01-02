@@ -44,7 +44,7 @@ class RegimeSwitchStrategy(StrategyBase):
 
     def prepare_data(self, data: pd.DataFrame) -> pd.DataFrame:
         out = data.copy()
-        adx = ADX(out, period=self.adx_window).calculate()
+        adx = ADX(out, window=self.adx_window).calculate()
         out = out.join(adx[["ADX", "Plus_DI", "Minus_DI"]])
         returns = out["Close"].pct_change()
         out["Volatility"] = returns.rolling(self.volatility_window).std()

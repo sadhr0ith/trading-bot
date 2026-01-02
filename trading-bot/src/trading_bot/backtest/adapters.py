@@ -10,7 +10,7 @@ from trading_bot.indicators.ema import EMA
 from trading_bot.indicators.macd import MACD
 from trading_bot.indicators.rsi import RSI
 from trading_bot.indicators.sma import SMA
-from trading_bot.indicators.stochastic import Stochastic
+from trading_bot.indicators.stochastic import StochasticOscillator
 from trading_bot.utils.feature_engineering import apply_configured_indicators
 
 
@@ -64,7 +64,7 @@ def add_indicator_set(data: pd.DataFrame, indicator_set: set[str]) -> pd.DataFra
     if "ema" in indicator_set:
         out = out.join(EMA(out, span=20, alias="EMA").calculate())
     if "stochastic" in indicator_set:
-        stoch = Stochastic(out).calculate()
-        out = out.join(stoch[["%K", "%D"]])
+        stoch = StochasticOscillator(out).calculate()
+        out = out.join(stoch[["Stochastic_K", "Stochastic_D"]])
 
     return out

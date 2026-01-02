@@ -14,6 +14,7 @@ __pycache__/
 
 # Testing
 .coverage
+.coverage.*
 .pytest_cache/
 htmlcov/
 .tox/
@@ -47,6 +48,7 @@ nohup.out
 docs/
 saved_models/
 cache/
+reports/
 paper_trading_state*.json
 paper_trading_state*.json.lock
 

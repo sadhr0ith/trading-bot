@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import pandas as pd
 
+from trading_bot.models.signal import SignalAction, SignalDecision
 from trading_bot.utils.logger import setup_logger
 from trading_bot.utils.paper_trading import PaperTradingExecutor
 from trading_bot.utils.risk_management import RiskManager
@@ -15,6 +16,7 @@ from trading_bot.utils.seeding import set_global_seeds
 if TYPE_CHECKING:
     import logging
 
+    from trading_bot.interfaces.signal_source import MarketContext
     from trading_bot.models.config import StrategyConfig
 
 
@@ -266,3 +268,82 @@ class StrategyBase(ABC):
         )
 
         return adaptive_buy, adaptive_sell
+
+    # -------------------------------------------------------------------------
+    # Multi-strategy signal generation
+    # -------------------------------------------------------------------------
+
+    def generate_signal(self, market_context: "MarketContext") -> SignalDecision | None:
+        """
+        Generate a trading signal for multi-strategy mode.
+
+        This method is called by the signal aggregation system when running
+        multiple strategies in a single process. Strategies can override
+        `_compute_signal_action()` to provide their decision logic.
+
+        The default implementation:
+        1. Updates self.data from market_context
+        2. Prepares and validates data
+        3. Adds indicators
+        4. Calls _compute_signal_action() to get the decision
+        5. Returns a SignalDecision or None if data is invalid
+
+        Args:
+            market_context: Market data and metadata for signal generation
+
+        Returns:
+            SignalDecision with the strategy's recommendation, or None if
+            the strategy cannot generate a valid signal (e.g., insufficient data)
+        """
+        # Update data from market context
+        self.data = market_context.data
+
+        # Prepare and validate
+        prepared = self._prepare_data(self.data)
+        if not self._validate_data(prepared):
+            return None
+
+        # Add indicators
+        enriched = self._add_indicators(prepared)
+
+        # Get the signal action from strategy-specific logic
+        result = self._compute_signal_action(enriched)
+        if result is None:
+            return None
+
+        action, confidence, edge, metadata = result
+
+        # Build and return SignalDecision
+        strategy_name = self.config.get("strategy") if self.config else self.__class__.__name__
+        return SignalDecision(
+            strategy_name=strategy_name,
+            symbol=market_context.symbol,
+            action=action,
+            timeframe=market_context.timeframe,
+            confidence=confidence,
+            edge=edge,
+            metadata=metadata,
+        )
+
+    def _compute_signal_action(
+        self,
+        data: pd.DataFrame,
+    ) -> tuple[SignalAction, float | None, float | None, dict[str, Any]] | None:
+        """
+        Compute the signal action for multi-strategy mode.
+
+        Override this method in subclasses to provide strategy-specific
+        signal generation logic. The default implementation returns HOLD.
+
+        Args:
+            data: Prepared and enriched DataFrame with indicators
+
+        Returns:
+            Tuple of (action, confidence, edge, metadata) or None if no signal.
+            - action: SignalAction (BUY, SELL, HOLD, EXIT, RISK_EXIT)
+            - confidence: Optional float 0-1 indicating signal strength
+            - edge: Optional float indicating expected return/edge
+            - metadata: Dict with strategy-specific info for logging
+        """
+        # Default: HOLD with no confidence/edge
+        return (SignalAction.HOLD, None, None, {"reason": "default_hold"})

@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -9,6 +10,7 @@ from sklearn.preprocessing import MinMaxScaler
 
 from trading_bot.indicators.rsi import RSI
 from trading_bot.models.lstm_model import create_lstm_model
+from trading_bot.models.signal import SignalAction
 from trading_bot.strategies.strategy_base import StrategyBase
 from trading_bot.data_fetcher import fetch_data_online
 from trading_bot.utils.email_notifications import send_email
@@ -695,3 +697,81 @@ class DayTradingStrategy(StrategyBase):
         X_seq, y_seq = self._create_sequences(feature_values, target_values, self.SEQ_LEN)
         latest_idx = self._latest_index(recent_data)
         return feature_cols, feature_values, target_values, latest_idx, X_seq, y_seq, recent_data
+
+    def _compute_signal_action(
+        self,
+        data: pd.DataFrame,
+    ) -> tuple[SignalAction, float | None, float | None, dict[str, Any]] | None:
+        """Compute signal action for multi-strategy mode."""
+        asset = self.config["ticker"]
+        strategy_name = self.config["strategy"]
+        persistence_key = build_persistence_key(
+            strategy=strategy_name,
+            data_source=self.config.get("data_source"),
+            ticker=asset,
+            interval=self.config.get("interval"),
+        )
+
+        persistence = ModelPersistence()
+        artifact = persistence.load(persistence_key, is_keras=True)
+        if not artifact:
+            return (SignalAction.HOLD, None, None, {"reason": "no_model"})
+
+        model = artifact.get("model")
+        scalers = artifact.get("scaler") or {}
+        scaler_X = scalers.get("scaler_X")
+        scaler_y = scalers.get("scaler_y")
+        meta = artifact.get("metadata", {})
+
+        if model is None or scaler_X is None or scaler_y is None:
+            return (SignalAction.HOLD, None, None, {"reason": "incomplete_artifact"})
+
+        # Check quality gate
+        trade_enabled = self._gate_from_metadata(meta)
+        if not trade_enabled:
+            return (SignalAction.HOLD, None, None, {"reason": "quality_gate_failed"})
+
+        # Prepare features
+        recent_data = self._prepare_recent_window(data)
+        if recent_data is None:
+            return (SignalAction.HOLD, None, None, {"reason": "insufficient_data"})
+
+        feature_data = ReturnOutlierClipper(
+            price_columns=["Close"],
+            lower_pct=0.1,
+            upper_pct=99.9,
+            min_periods=30,
+        ).transform(recent_data)
+        build = self._build_features(feature_data)
+        if build is None:
+            return (SignalAction.HOLD, None, None, {"reason": "feature_build_failed"})
+
+        feature_cols, feature_values, _, _, _, _, _ = build
+
+        # Run inference
+        try:
+            latest_sequence = feature_values[-self.SEQ_LEN:]
+            latest_scaled = scaler_X.transform(latest_sequence).reshape(1, self.SEQ_LEN, len(feature_cols))
+            predicted_return = float(scaler_y.inverse_transform(model.predict(latest_scaled, verbose=0)).ravel()[0])
+        except (ValueError, TypeError) as exc:
+            return (SignalAction.HOLD, None, None, {"reason": f"inference_failed: {exc}"})
+
+        min_edge = self._min_edge()
+        if predicted_return > min_edge:
+            action = SignalAction.BUY
+            reason = "positive_predicted_return"
+        elif predicted_return < -min_edge:
+            action = SignalAction.SELL
+            reason = "negative_predicted_return"
+        else:
+            action = SignalAction.HOLD
+            reason = "within_threshold"
+
+        metadata = {
+            "strategy_type": "day_trading_lstm",
+            "predicted_return": predicted_return,
+            "min_edge": min_edge,
+            "reason": reason,
+        }
+
+        return (action, None, predicted_return, metadata)

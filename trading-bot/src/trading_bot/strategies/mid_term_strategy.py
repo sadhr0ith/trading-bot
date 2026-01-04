@@ -16,6 +16,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.utils.validation import check_is_fitted
 
+from trading_bot.models.signal import SignalAction
 from trading_bot.utils.feature_engineering import build_lag_feature_columns, create_forward_return_target
 from trading_bot.utils.transformers import (
     FeatureSelector,
@@ -369,3 +370,91 @@ class MidTermStrategy(StrategyBase):
                 self.log_action(f"Zero-importance features (candidates for removal): {zero}", "warning")
         except (ValueError, TypeError, KeyError):
             return
+
+    def _run_inference(self, data: pd.DataFrame) -> float | None:
+        """Run inference to get predicted return. Returns None if inference fails."""
+        asset = self.config.get("ticker", "UNKNOWN")
+        persistence_key = build_persistence_key(
+            strategy=self.config.get("strategy", "mid_term"),
+            data_source=self.config.get("data_source"),
+            ticker=asset,
+            interval=self.config.get("interval"),
+        )
+
+        indicator_names = self._indicator_set()
+        lags = [5, 10, 20, 60, 120]
+        clipper = self._build_outlier_clipper()
+        feature_columns = build_lag_feature_columns(lags)
+        feature_columns.extend(self._indicator_feature_columns(indicator_names))
+
+        fe_pipeline = Pipeline(
+            steps=[
+                ("outlier_clip", clipper),
+                (
+                    "indicators",
+                    IndicatorTransformer(
+                        indicators=indicator_names,
+                        use_indicators=self.config.get("use_indicators", True),
+                    ),
+                ),
+                ("lag_features", LagReturnDrawdownTransformer(price_col="Close", lags=lags)),
+                ("feature_selector", FeatureSelector(feature_columns=feature_columns, handle_missing="drop")),
+            ],
+        )
+
+        try:
+            features = fe_pipeline.transform(data)
+            clean_rows = features.dropna()
+            if clean_rows.empty:
+                return None
+            inference_row = clean_rows.tail(1)
+            inference_row = inference_row[feature_columns]
+        except (KeyError, ValueError):
+            return None
+
+        persistence = ModelPersistence()
+        try:
+            artifact = persistence.load(persistence_key)
+            if not artifact or not artifact.get("model"):
+                return None
+            pipeline = artifact.get("model")
+            meta = artifact.get("metadata") or {}
+            persisted_cols = meta.get("feature_columns") or feature_columns
+            check_is_fitted(pipeline)
+            inference_slice = inference_row[persisted_cols]
+            predicted_return = float(pipeline.predict(inference_slice)[0])
+            return predicted_return
+        except (OSError, pickle.UnpicklingError, ValueError, NotFittedError, KeyError):
+            return None
+
+    def _compute_signal_action(
+        self,
+        data: pd.DataFrame,
+    ) -> tuple[SignalAction, float | None, float | None, dict[str, Any]] | None:
+        """Compute signal action for multi-strategy mode."""
+        predicted_return = self._run_inference(data)
+
+        if predicted_return is None:
+            return (SignalAction.HOLD, None, None, {"reason": "inference_failed"})
+
+        buy_threshold, sell_threshold = self._get_adaptive_thresholds(data)
+
+        if predicted_return > buy_threshold:
+            action = SignalAction.BUY
+            reason = "positive_expected_return"
+        elif predicted_return < sell_threshold:
+            action = SignalAction.SELL
+            reason = "negative_expected_return"
+        else:
+            action = SignalAction.HOLD
+            reason = "within_threshold"
+
+        metadata = {
+            "strategy_type": "mid_term",
+            "predicted_return": predicted_return,
+            "buy_threshold": buy_threshold,
+            "sell_threshold": sell_threshold,
+            "reason": reason,
+        }
+
+        return (action, None, predicted_return, metadata)

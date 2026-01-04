@@ -16,6 +16,7 @@ from sklearn.utils.validation import check_is_fitted
 from xgboost import XGBRegressor
 
 from trading_bot.core.exceptions import InsufficientDataError
+from trading_bot.models.signal import SignalAction
 from trading_bot.utils.email_notifications import send_email
 from trading_bot.utils.model_persistence import ModelPersistence
 from trading_bot.utils.strategy_helpers import build_persistence_key, train_or_load_pipeline
@@ -697,3 +698,54 @@ class ShortTermStrategy(StrategyBase):
             f"{msg} -> {decision} ({reason}) | trade: {trade_summary}",
             self.config["notification_email"],
         )
+
+    def _compute_signal_action(
+        self,
+        data: pd.DataFrame,
+    ) -> tuple[SignalAction, float | None, float | None, dict[str, Any]] | None:
+        """Compute signal action for multi-strategy mode."""
+        asset = self.config["ticker"]
+        strategy_name = self.config["strategy"]
+        persistence_key = build_persistence_key(
+            strategy=strategy_name,
+            data_source=self.config.get("data_source"),
+            ticker=asset,
+            interval=self.config.get("interval"),
+        )
+
+        # Try to load and run inference
+        persistence = ModelPersistence()
+        try:
+            artifact = persistence.load(persistence_key)
+            if not artifact or not artifact.get("model"):
+                return (SignalAction.HOLD, None, None, {"reason": "no_model"})
+
+            pipeline = artifact.get("model")
+            check_is_fitted(pipeline)
+
+            MIN_INFERENCE_ROWS = self.config.get("min_inference_rows", 25)
+            if len(data) < MIN_INFERENCE_ROWS:
+                return (SignalAction.HOLD, None, None, {"reason": "insufficient_data"})
+
+            data_inference = data.iloc[-MIN_INFERENCE_ROWS:]
+            predictions = pipeline.predict(data_inference)
+            predicted_return = float(predictions[-1])
+        except (OSError, pickle.UnpicklingError, ValueError, NotFittedError, KeyError) as exc:
+            return (SignalAction.HOLD, None, None, {"reason": f"inference_failed: {exc}"})
+
+        buy_threshold, sell_threshold = self._get_adaptive_thresholds(data)
+        decision_data = self._build_decision_frame(data)
+        decision, reason, _, _, _ = self._decide_signal(predicted_return, decision_data, buy_threshold, sell_threshold)
+
+        action_map = {"BUY": SignalAction.BUY, "SELL": SignalAction.SELL, "HOLD": SignalAction.HOLD}
+        action = action_map.get(decision, SignalAction.HOLD)
+
+        metadata = {
+            "strategy_type": "short_term",
+            "predicted_return": predicted_return,
+            "buy_threshold": buy_threshold,
+            "sell_threshold": sell_threshold,
+            "reason": reason,
+        }
+
+        return (action, None, predicted_return, metadata)

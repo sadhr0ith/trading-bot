@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import pandas as pd
 from sklearn.exceptions import NotFittedError
@@ -22,6 +24,7 @@ from trading_bot.core.exceptions import InsufficientDataError
 from trading_bot.indicators.adx import ADX
 from trading_bot.indicators.bollinger_bands import BollingerBands
 from trading_bot.indicators.rsi import RSI
+from trading_bot.models.signal import SignalAction
 from trading_bot.strategies.strategy_base import StrategyBase
 from trading_bot.utils.email_notifications import send_email
 from trading_bot.utils.feature_engineering import (
@@ -331,3 +334,62 @@ class DayTradingMLStrategy(StrategyBase):
             msg,
             self.config["notification_email"],
         )
+
+    def _compute_signal_action(
+        self,
+        data: pd.DataFrame,
+    ) -> tuple[SignalAction, float | None, float | None, dict[str, Any]] | None:
+        """Compute signal action for multi-strategy mode."""
+        asset = self.config["ticker"]
+        strategy_name = self.config["strategy"]
+        persistence_key = build_persistence_key(
+            strategy=strategy_name,
+            data_source=self.config.get("data_source"),
+            ticker=asset,
+            interval=self.config.get("interval"),
+        )
+
+        persistence = ModelPersistence()
+        artifact = persistence.load(persistence_key)
+        if not artifact:
+            return (SignalAction.HOLD, None, None, {"reason": "no_model"})
+
+        pipeline = artifact.get("model")
+        meta = artifact.get("metadata", {})
+
+        if pipeline is None:
+            return (SignalAction.HOLD, None, None, {"reason": "no_pipeline"})
+
+        # Check quality gate
+        trade_enabled = self._gate_from_metadata(meta or {})
+        if not trade_enabled:
+            return (SignalAction.HOLD, None, None, {"reason": "quality_gate_failed"})
+
+        try:
+            check_is_fitted(pipeline)
+        except NotFittedError:
+            return (SignalAction.HOLD, None, None, {"reason": "pipeline_not_fitted"})
+
+        # Build features
+        try:
+            feature_data, feature_columns = self._build_features(data)
+            if len(feature_data) < self.min_inference_rows:
+                return (SignalAction.HOLD, None, None, {"reason": "insufficient_data"})
+
+            X_inference = feature_data.iloc[-self.min_inference_rows:][feature_columns]
+            prediction = float(pipeline.predict(X_inference)[-1])
+        except (ValueError, TypeError, KeyError) as exc:
+            return (SignalAction.HOLD, None, None, {"reason": f"inference_failed: {exc}"})
+
+        decision = self._decide_signal(prediction)
+        action_map = {"BUY": SignalAction.BUY, "SELL": SignalAction.SELL, "HOLD": SignalAction.HOLD}
+        action = action_map.get(decision, SignalAction.HOLD)
+
+        metadata = {
+            "strategy_type": "day_trading_ml",
+            "predicted_return": prediction,
+            "min_edge": self._min_edge(),
+            "reason": decision.lower(),
+        }
+
+        return (action, None, prediction, metadata)

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 import pandas as pd
 
 from trading_bot.backtest.adapters import compute_atr, compute_donchian_channels
@@ -7,6 +9,7 @@ from trading_bot.backtest.interfaces import Signal, StrategyState
 from trading_bot.indicators.adx import ADX
 from trading_bot.indicators.bollinger_bands import BollingerBands
 from trading_bot.indicators.rsi import RSI
+from trading_bot.models.signal import SignalAction
 from trading_bot.strategies.strategy_base import StrategyBase
 
 
@@ -207,3 +210,59 @@ class RegimeSwitchStrategy(StrategyBase):
         price = float(data["Close"].iloc[-1])
         self.log_action(f"Regime switch signal: {signal}", "info" if signal != Signal.HOLD else "warning")
         self.order_executor.process_signal(asset, signal.value, price, self.risk_manager)
+
+    def _compute_signal_action(
+        self,
+        data: pd.DataFrame,
+    ) -> tuple[SignalAction, float | None, float | None, dict[str, Any]] | None:
+        """Compute signal action for multi-strategy mode."""
+        asset = self.config["ticker"]
+        position = self.order_executor.state.get("positions", {}).get(asset)
+        in_position = position is not None
+        entry_price = float(position["entry_price"]) if position else None
+
+        entry_time = None
+        if position and position.get("opened_at"):
+            try:
+                entry_time = pd.to_datetime(position["opened_at"], utc=True)
+            except (ValueError, TypeError):
+                entry_time = None
+
+        last_exit = None
+        history = self.order_executor.state.get("history", [])
+        for record in reversed(history):
+            if record.get("symbol") == asset and record.get("action") == "CLOSE":
+                try:
+                    last_exit = pd.to_datetime(record.get("timestamp"), utc=True)
+                except (ValueError, TypeError):
+                    last_exit = None
+                break
+
+        signal = self._signal(data, in_position, entry_price, entry_time, last_exit)
+
+        # Convert Signal enum to SignalAction
+        action_map = {
+            Signal.BUY: SignalAction.BUY,
+            Signal.SELL: SignalAction.SELL,
+            Signal.HOLD: SignalAction.HOLD,
+        }
+        action = action_map.get(signal, SignalAction.HOLD)
+
+        # Determine regime for metadata
+        row = data.iloc[-1]
+        adx = float(row.get("ADX", 0.0))
+        volatility = float(row.get("Volatility", 0.0))
+        regime = "high_vol" if volatility >= self.volatility_high_threshold else (
+            "trending" if adx >= self.adx_trend_threshold else "ranging"
+        )
+
+        metadata = {
+            "strategy_type": "regime_switch",
+            "regime": regime,
+            "adx": adx,
+            "volatility": volatility,
+            "in_position": in_position,
+            "signal": signal.value,
+        }
+
+        return (action, None, None, metadata)

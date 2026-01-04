@@ -238,9 +238,28 @@ class PaperTradingExecutor:
             TradingMetrics.record_trade(self.strategy_name, "SELL")
         return {"status": "closed", "pnl": pnl, "reason": reason}
 
-    def process_signal(self, symbol: str, signal: str, price: float, risk_manager: RiskManager) -> dict:
+    def process_signal(
+        self,
+        symbol: str,
+        signal: str,
+        price: float,
+        risk_manager: RiskManager,
+        votes: list[dict] | None = None,
+        aggregation_reason: str | None = None,
+    ) -> dict:
         """
         Execute BUY/SELL/HOLD in paper-trading mode with simple risk controls.
+
+        Args:
+            symbol: Trading symbol
+            signal: Signal to execute (BUY/SELL/HOLD)
+            price: Current price
+            risk_manager: RiskManager instance for position sizing and exit logic
+            votes: Optional list of strategy votes (for multi-strategy mode audit)
+            aggregation_reason: Optional reason string explaining the aggregated decision
+
+        Returns:
+            dict with execution status and details
         """
         position = self._current_position(symbol)
         summary: dict = {"status": "noop", "balance": self.state["balance"]}
@@ -276,15 +295,19 @@ class PaperTradingExecutor:
                 "opened_at": datetime.now(timezone.utc).isoformat(),
             }
             self.state["balance"] -= notional + fee
-            self.state["history"].append(
-                {
-                    "symbol": symbol,
-                    "action": "BUY",
-                    "price": price,
-                    "size": size,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                },
-            )
+            history_entry = {
+                "symbol": symbol,
+                "action": "BUY",
+                "price": price,
+                "size": size,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+            # Add multi-strategy audit info if provided
+            if votes is not None:
+                history_entry["votes"] = votes
+            if aggregation_reason is not None:
+                history_entry["aggregation_reason"] = aggregation_reason
+            self.state["history"].append(history_entry)
             self._save_state()
             # Record trade metric
             if self.strategy_name:
